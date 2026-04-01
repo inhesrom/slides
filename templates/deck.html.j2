@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html class="{{ color_scheme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title | default("Slides") }}</title>
+  <style>{{ core_css | safe }}{{ theme_css | safe }}</style>
+</head>
+<body class="deck aspect-{{ aspect }}">
+  {% for slide in slides %}
+  <section class="slide {{ slide.classes }}" data-index="{{ slide.index }}" data-transition="{{ slide.transition }}"{% if slide.notes %} data-notes="{{ slide.notes | join('\n') }}"{% endif %}>
+    {{ slide.html | safe }}
+  </section>
+  {% endfor %}
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <script>{{ slides_js | safe }}</script>
+</body>
+</html>
