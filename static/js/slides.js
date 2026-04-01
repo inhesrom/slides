@@ -17,8 +17,45 @@
     updateHash();
   }
 
-  function next() { showSlide(current + 1); }
-  function prev() { showSlide(current - 1); }
+  function getFragments() {
+    var slide = slides[current];
+    if (!slide) return [];
+    return Array.prototype.slice.call(slide.querySelectorAll('.fragment'));
+  }
+
+  function nextVisibleFragment() {
+    var frags = getFragments();
+    for (var i = 0; i < frags.length; i++) {
+      if (!frags[i].classList.contains('visible')) return i;
+    }
+    return -1;
+  }
+
+  function prevVisibleFragment() {
+    var frags = getFragments();
+    for (var i = frags.length - 1; i >= 0; i--) {
+      if (frags[i].classList.contains('visible')) return i;
+    }
+    return -1;
+  }
+
+  function next() {
+    var idx = nextVisibleFragment();
+    if (idx >= 0) {
+      getFragments()[idx].classList.add('visible');
+    } else {
+      showSlide(current + 1);
+    }
+  }
+
+  function prev() {
+    var idx = prevVisibleFragment();
+    if (idx >= 0) {
+      getFragments()[idx].classList.remove('visible');
+    } else {
+      showSlide(current - 1);
+    }
+  }
 
   function updateProgress() {
     var fill = document.getElementById('progress-fill');
@@ -128,6 +165,8 @@
       try { data = JSON.parse(event.data); } catch(e) { return; }
       if (data.type === 'reload') {
         location.reload();
+      } else if (data.type === 'navigate') {
+        showSlide(data.slide);
       }
     };
 
@@ -139,6 +178,13 @@
       ws.close();
     };
   }
+
+  // Listen for postMessage from presenter view
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'goto' && typeof e.data.slide === 'number') {
+      showSlide(e.data.slide);
+    }
+  });
 
   // Initialize
   current = readHash();

@@ -173,3 +173,218 @@ fn parse_grid(line: &str) -> LayoutDirective {
         LayoutDirective::Grid { cols: 2, rows: 1 }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- extract_notes tests ---
+
+    #[test]
+    fn test_extract_block_notes() {
+        let input = "Some content\n\n:::notes\nSpeaker note here\n:::\n\nMore content";
+        let (notes, cleaned) = extract_notes(input);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].text, "Speaker note here");
+        assert!(!cleaned.contains(":::notes"));
+        assert!(!cleaned.contains("Speaker note here"));
+        assert!(cleaned.contains("Some content"));
+        assert!(cleaned.contains("More content"));
+    }
+
+    #[test]
+    fn test_extract_multiline_notes() {
+        let input = ":::notes\nLine 1\nLine 2\nLine 3\n:::";
+        let (notes, _cleaned) = extract_notes(input);
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].text.contains("Line 1"));
+        assert!(notes[0].text.contains("Line 3"));
+    }
+
+    #[test]
+    fn test_no_notes() {
+        let input = "Just regular content\nNo notes here";
+        let (notes, cleaned) = extract_notes(input);
+        assert!(notes.is_empty());
+        assert!(cleaned.contains("Just regular content"));
+    }
+
+    #[test]
+    fn test_multiple_note_blocks() {
+        let input = ":::notes\nNote 1\n:::\n\nContent\n\n:::notes\nNote 2\n:::";
+        let (notes, _) = extract_notes(input);
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].text, "Note 1");
+        assert_eq!(notes[1].text, "Note 2");
+    }
+
+    // --- extract_inline_notes tests ---
+
+    #[test]
+    fn test_inline_note_basic() {
+        let input = "Some text ^[This is a note] more text";
+        let (notes, cleaned) = extract_inline_notes(input);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].text, "This is a note");
+        assert!(cleaned.contains("Some text  more text"));
+        assert!(!cleaned.contains("^["));
+    }
+
+    #[test]
+    fn test_inline_note_at_end() {
+        let input = "Text ^[End note]";
+        let (notes, cleaned) = extract_inline_notes(input);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].text, "End note");
+        assert_eq!(cleaned.trim(), "Text");
+    }
+
+    #[test]
+    fn test_multiple_inline_notes() {
+        let input = "Text ^[Note 1] middle ^[Note 2] end";
+        let (notes, cleaned) = extract_inline_notes(input);
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].text, "Note 1");
+        assert_eq!(notes[1].text, "Note 2");
+        assert!(!cleaned.contains("^["));
+    }
+
+    #[test]
+    fn test_no_inline_notes() {
+        let input = "Just regular text with a ^ caret";
+        let (notes, cleaned) = extract_inline_notes(input);
+        assert!(notes.is_empty());
+        assert!(cleaned.contains("^"));
+    }
+
+    #[test]
+    fn test_nested_brackets_in_note() {
+        let input = "Text ^[Note with [brackets] inside]";
+        let (notes, _) = extract_inline_notes(input);
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].text.contains("[brackets]"));
+    }
+
+    // --- extract_layout tests ---
+
+    #[test]
+    fn test_split_default() {
+        let input = ":::split\nLeft content\n+++\nRight content\n:::";
+        let (layout, regions) = extract_layout(input);
+        assert!(layout.is_some());
+        if let Some(LayoutDirective::Split { ratios }) = layout {
+            assert_eq!(ratios, vec![50.0, 50.0]);
+        } else {
+            panic!("Expected Split directive");
+        }
+        assert_eq!(regions.len(), 2);
+        assert!(regions[0].contains("Left content"));
+        assert!(regions[1].contains("Right content"));
+    }
+
+    #[test]
+    fn test_split_custom_ratio() {
+        let input = ":::split 60/40\nLeft\n+++\nRight\n:::";
+        let (layout, regions) = extract_layout(input);
+        if let Some(LayoutDirective::Split { ratios }) = layout {
+            assert_eq!(ratios, vec![60.0, 40.0]);
+        } else {
+            panic!("Expected Split directive");
+        }
+        assert_eq!(regions.len(), 2);
+    }
+
+    #[test]
+    fn test_split_three_way() {
+        let input = ":::split 33/34/33\nA\n+++\nB\n+++\nC\n:::";
+        let (layout, regions) = extract_layout(input);
+        if let Some(LayoutDirective::Split { ratios }) = layout {
+            assert_eq!(ratios, vec![33.0, 34.0, 33.0]);
+        } else {
+            panic!("Expected Split directive");
+        }
+        assert_eq!(regions.len(), 3);
+    }
+
+    #[test]
+    fn test_grid_layout() {
+        let input = ":::grid 2x2\nA\n+++\nB\n+++\nC\n+++\nD\n:::";
+        let (layout, regions) = extract_layout(input);
+        if let Some(LayoutDirective::Grid { cols, rows }) = layout {
+            assert_eq!(cols, 2);
+            assert_eq!(rows, 2);
+        } else {
+            panic!("Expected Grid directive");
+        }
+        assert_eq!(regions.len(), 4);
+    }
+
+    #[test]
+    fn test_grid_3x1() {
+        let input = ":::grid 3x1\nA\n+++\nB\n+++\nC\n:::";
+        let (layout, _) = extract_layout(input);
+        if let Some(LayoutDirective::Grid { cols, rows }) = layout {
+            assert_eq!(cols, 3);
+            assert_eq!(rows, 1);
+        } else {
+            panic!("Expected Grid directive");
+        }
+    }
+
+    #[test]
+    fn test_stack_layout() {
+        let input = ":::stack\nTop\n+++\nBottom\n:::";
+        let (layout, regions) = extract_layout(input);
+        assert!(matches!(layout, Some(LayoutDirective::Stack)));
+        assert_eq!(regions.len(), 2);
+    }
+
+    #[test]
+    fn test_no_layout() {
+        let input = "Just regular markdown\n\nNo layout here";
+        let (layout, regions) = extract_layout(input);
+        assert!(layout.is_none());
+        assert!(regions.is_empty());
+    }
+
+    #[test]
+    fn test_layout_with_markdown_content() {
+        let input = ":::split 50/50\n## Left Title\n\nSome **bold** text\n+++\n## Right Title\n\n- list item\n:::";
+        let (layout, regions) = extract_layout(input);
+        assert!(layout.is_some());
+        assert_eq!(regions.len(), 2);
+        assert!(regions[0].contains("## Left Title"));
+        assert!(regions[1].contains("- list item"));
+    }
+
+    // --- parse_split edge cases ---
+
+    #[test]
+    fn test_parse_split_invalid_ratio() {
+        let input = ":::split abc\nA\n+++\nB\n:::";
+        let (layout, _) = extract_layout(input);
+        if let Some(LayoutDirective::Split { ratios }) = layout {
+            // Falls back to 50/50 when parse fails
+            assert_eq!(ratios, vec![50.0, 50.0]);
+        } else {
+            panic!("Expected Split directive");
+        }
+    }
+
+    // --- directive_args tests ---
+
+    #[test]
+    fn test_directive_args_basic() {
+        assert_eq!(directive_args(":::split 60/40", ":::split"), "60/40");
+    }
+
+    #[test]
+    fn test_directive_args_no_args() {
+        assert_eq!(directive_args(":::split", ":::split"), "");
+    }
+
+    #[test]
+    fn test_directive_args_wrong_prefix() {
+        assert_eq!(directive_args(":::grid 2x2", ":::split"), "");
+    }
+}

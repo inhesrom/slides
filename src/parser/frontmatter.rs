@@ -84,3 +84,85 @@ pub fn extract(input: &str) -> Result<(DeckConfig, String)> {
     // No closing delimiter found, treat entire input as body
     Ok((DeckConfig::default(), input.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_frontmatter() {
+        let (config, body) = extract("# Hello\n\nWorld").unwrap();
+        assert!(config.title.is_none());
+        assert_eq!(config.theme, "minimal");
+        assert!(body.contains("# Hello"));
+    }
+
+    #[test]
+    fn test_basic_frontmatter() {
+        let input = "---\ntitle: My Deck\ntheme: dark\n---\n\n# Slide 1";
+        let (config, body) = extract(input).unwrap();
+        assert_eq!(config.title.as_deref(), Some("My Deck"));
+        assert_eq!(config.theme, "dark");
+        assert!(body.contains("# Slide 1"));
+        assert!(!body.contains("title:"));
+    }
+
+    #[test]
+    fn test_frontmatter_defaults() {
+        let input = "---\ntitle: Test\n---\n\nBody";
+        let (config, _body) = extract(input).unwrap();
+        assert_eq!(config.transition, "slide");
+        assert_eq!(config.color_scheme, "light");
+        assert_eq!(config.auto_fit, "warn");
+    }
+
+    #[test]
+    fn test_aspect_ratio_wide() {
+        let input = "---\naspect: \"16:9\"\n---\n\nBody";
+        let (config, _) = extract(input).unwrap();
+        assert_eq!(config.aspect.class_name(), "16-9");
+    }
+
+    #[test]
+    fn test_aspect_ratio_standard() {
+        let input = "---\naspect: \"4:3\"\n---\n\nBody";
+        let (config, _) = extract(input).unwrap();
+        assert_eq!(config.aspect.class_name(), "4-3");
+    }
+
+    #[test]
+    fn test_full_frontmatter() {
+        let input = "---\ntitle: Full\ntheme: dark\naspect: \"4:3\"\ntransition: fade\nhighlight_theme: monokai\ncolor_scheme: dark\nauto_fit: shrink\nexport_images: inline\n---\n\nContent";
+        let (config, body) = extract(input).unwrap();
+        assert_eq!(config.title.as_deref(), Some("Full"));
+        assert_eq!(config.theme, "dark");
+        assert_eq!(config.transition, "fade");
+        assert_eq!(config.highlight_theme, "monokai");
+        assert_eq!(config.color_scheme, "dark");
+        assert_eq!(config.auto_fit, "shrink");
+        assert_eq!(config.export_images, "inline");
+        assert!(body.contains("Content"));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let (config, body) = extract("").unwrap();
+        assert!(config.title.is_none());
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn test_unclosed_frontmatter() {
+        let input = "---\ntitle: Broken\n\n# No closing delimiter";
+        let (config, body) = extract(input).unwrap();
+        // Should treat entire input as body
+        assert!(config.title.is_none());
+        assert!(body.contains("---"));
+    }
+
+    #[test]
+    fn test_invalid_yaml() {
+        let input = "---\n[invalid yaml\n---\n\nBody";
+        assert!(extract(input).is_err());
+    }
+}

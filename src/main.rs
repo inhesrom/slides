@@ -73,7 +73,10 @@ async fn main() -> Result<()> {
             render::export::export(&file, &format, output.as_deref())?;
         }
         Command::Present { file, port } => {
-            server::serve(file, port, true).await?;
+            // Open presenter view, audience gets the root URL
+            let url = format!("http://localhost:{}/presenter", port);
+            let _ = open::that(&url);
+            server::serve(file, port, false).await?;
         }
     }
 

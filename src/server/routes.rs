@@ -10,22 +10,28 @@ use axum::{
 use tokio::sync::broadcast;
 
 use super::SharedDeck;
+use crate::presenter;
 
 #[derive(Clone)]
 pub struct AppState {
     pub deck: SharedDeck,
     pub tx: broadcast::Sender<String>,
+    pub deck_title: String,
 }
 
-/// Build the Axum router with index, websocket, and static file routes.
+/// Build the Axum router with index, websocket, presenter, and static file routes.
 pub fn create_router(
     deck: SharedDeck,
     tx: broadcast::Sender<String>,
     file: &Path,
+    deck_title: String,
 ) -> Router {
-    let state = AppState { deck, tx };
+    let state = AppState {
+        deck,
+        tx,
+        deck_title,
+    };
 
-    // Serve assets from the markdown file's parent directory
     let assets_dir = file
         .parent()
         .unwrap_or(Path::new("."))
@@ -35,6 +41,7 @@ pub fn create_router(
 
     Router::new()
         .route("/", get(index))
+        .route("/presenter", get(presenter_view))
         .route("/ws", get(ws_handler))
         .fallback_service(serve_dir)
         .with_state(state)
@@ -43,6 +50,10 @@ pub fn create_router(
 async fn index(State(state): State<AppState>) -> impl IntoResponse {
     let deck = state.deck.read().await;
     Html(deck.html.clone())
+}
+
+async fn presenter_view(State(state): State<AppState>) -> impl IntoResponse {
+    Html(presenter::presenter_html(&state.deck_title))
 }
 
 async fn ws_handler(
@@ -55,9 +66,30 @@ async fn ws_handler(
 async fn handle_ws(mut socket: WebSocket, state: AppState) {
     let mut rx = state.tx.subscribe();
 
-    while let Ok(msg) = rx.recv().await {
-        if socket.send(Message::Text(msg.into())).await.is_err() {
-            break;
+    // Handle incoming messages from the client (e.g., navigation from presenter)
+    // and broadcast messages from the file watcher
+    loop {
+        tokio::select! {
+            msg = rx.recv() => {
+                match msg {
+                    Ok(text) => {
+                        if socket.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        // Broadcast navigation events from presenter to all clients
+                        let _ = state.tx.send(text.to_string());
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
         }
     }
 }

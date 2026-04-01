@@ -31,7 +31,12 @@ pub async fn serve(file: PathBuf, port: u16, open: bool) -> Result<()> {
         }
     });
 
-    let app = routes::create_router(shared, tx, &file);
+    let deck_title = deck
+        .config
+        .title
+        .clone()
+        .unwrap_or_else(|| "Slides".to_string());
+    let app = routes::create_router(shared, tx, &file, deck_title);
 
     let addr = format!("0.0.0.0:{}", port);
     tracing::info!("Serving on http://localhost:{}", port);
