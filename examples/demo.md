@@ -25,6 +25,12 @@ Every markdown slide tool either:
 
 ^[Pause here — let the audience relate to the pain]
 
+--- {class: centered}
+
+# The Solution
+
+*slides* — one markdown file, full presentation
+
 ---
 
 :::split 60/40

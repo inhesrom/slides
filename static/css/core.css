@@ -185,6 +185,7 @@ em { font-style: italic; }
 .slide.centered {
   text-align: center;
   align-items: center;
+  justify-content: center;
 }
 
 /* Semantic styles */

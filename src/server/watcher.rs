@@ -21,6 +21,7 @@ pub fn watch(
     file: PathBuf,
     shared: Arc<RwLock<RenderedDeck>>,
     tx: broadcast::Sender<String>,
+    rt: tokio::runtime::Handle,
 ) -> Result<()> {
     let (notify_tx, notify_rx) = std::sync::mpsc::channel();
     let mut debouncer = new_debouncer(Duration::from_millis(200), notify_tx)?;
@@ -34,14 +35,21 @@ pub fn watch(
     for result in notify_rx {
         match result {
             Ok(_events) => {
-                tracing::info!("File changed, reloading...");
                 match reload_deck(&file) {
                     Ok(rendered) => {
-                        let rt = tokio::runtime::Handle::current();
-                        rt.block_on(async {
+                        let changed = rt.block_on(async {
+                            let current = shared.read().await;
+                            if current.html == rendered.html {
+                                return false;
+                            }
+                            drop(current);
                             *shared.write().await = rendered;
+                            true
                         });
-                        let _ = tx.send(r#"{"type":"reload"}"#.to_string());
+                        if changed {
+                            tracing::info!("File changed, reloading...");
+                            let _ = tx.send(r#"{"type":"reload"}"#.to_string());
+                        }
                     }
                     Err(e) => tracing::error!("Reload error: {}", e),
                 }

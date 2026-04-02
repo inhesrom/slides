@@ -2,6 +2,7 @@ use crate::parser::frontmatter::AspectRatio;
 
 /// Overflow detection result for a single slide.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct OverflowResult {
     pub slide_index: usize,
     pub estimated_height: f32,

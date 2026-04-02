@@ -53,7 +53,7 @@ body { background: #1a1a2e; color: #e2e8f0; font-family: system-ui, sans-serif; 
 .info-panel { flex: 1; display: flex; flex-direction: column; gap: 1rem; }
 .notes { flex: 1; background: #0f172a; border-radius: 8px; padding: 1.5rem; overflow-y: auto; }
 .notes h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.75rem; }
-#notes-content { font-size: 1.1rem; line-height: 1.6; }
+#notes-content { font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap; }
 .controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; padding: 1rem; background: #0f172a; border-radius: 8px; }
 .timer { font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .progress { font-size: 1.1rem; color: #94a3b8; }
@@ -78,7 +78,7 @@ const PRESENTER_JS: &str = r#"
   var progressEl = document.getElementById('progress');
   var timerBtn = document.getElementById('timer-btn');
 
-  // Connect to the server to get slide data
+  // Connect to the server for reload/navigate events
   var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   var ws = new WebSocket(protocol + '//' + location.host + '/ws');
 
@@ -86,11 +86,10 @@ const PRESENTER_JS: &str = r#"
     var data;
     try { data = JSON.parse(event.data); } catch(e) { return; }
     if (data.type === 'reload') {
-      fetchSlideData();
-    } else if (data.type === 'slide_data') {
-      slidesData = data.slides;
-      totalSlides = slidesData.length;
-      showSlide(currentSlide);
+      currentFrame.src = '/';
+    } else if (data.type === 'navigate') {
+      currentSlide = data.slide;
+      updatePresenterView();
     }
   };
 
@@ -98,19 +97,54 @@ const PRESENTER_JS: &str = r#"
     setTimeout(function() { location.reload(); }, 1000);
   };
 
-  function fetchSlideData() {
-    // Reload the iframes
-    currentFrame.src = '/#/' + currentSlide;
-    if (currentSlide + 1 < totalSlides) {
-      nextFrame.src = '/#/' + (currentSlide + 1);
+  // Load the main deck in the current iframe
+  currentFrame.src = '/';
+
+  // Once the iframe loads, extract slide data (notes, count) from its DOM
+  currentFrame.addEventListener('load', function() {
+    extractSlideData();
+    updatePresenterView();
+  });
+
+  function extractSlideData() {
+    try {
+      var doc = currentFrame.contentDocument || currentFrame.contentWindow.document;
+      var slides = doc.querySelectorAll('.slide');
+      totalSlides = slides.length;
+      slidesData = [];
+      for (var i = 0; i < slides.length; i++) {
+        slidesData.push({
+          notes: slides[i].getAttribute('data-notes') || ''
+        });
+      }
+    } catch(e) {
+      // Cross-origin or not loaded yet
     }
   }
 
-  // Set up iframes to point to the main deck
-  currentFrame.src = '/';
-  nextFrame.src = '/';
+  function updatePresenterView() {
+    // Navigate the current iframe to the right slide
+    if (currentFrame.contentWindow) {
+      currentFrame.contentWindow.postMessage({ type: 'goto', slide: currentSlide }, '*');
+    }
 
-  // Use keyboard for navigation
+    // Load next slide preview
+    if (currentSlide + 1 < totalSlides) {
+      nextFrame.src = '/#/' + (currentSlide + 1);
+    }
+
+    // Update notes
+    if (slidesData[currentSlide] && slidesData[currentSlide].notes) {
+      notesEl.textContent = slidesData[currentSlide].notes;
+    } else {
+      notesEl.textContent = 'No notes for this slide.';
+    }
+
+    // Update progress
+    progressEl.textContent = 'Slide ' + (currentSlide + 1) + ' / ' + totalSlides;
+  }
+
+  // Keyboard navigation
   document.addEventListener('keydown', function(e) {
     switch(e.key) {
       case 'ArrowRight':
@@ -133,30 +167,9 @@ const PRESENTER_JS: &str = r#"
     var newIdx = currentSlide + delta;
     if (newIdx >= 0 && newIdx < totalSlides) {
       currentSlide = newIdx;
-      showSlide(currentSlide);
-      // Send navigation to audience view via websocket
+      updatePresenterView();
       ws.send(JSON.stringify({ type: 'navigate', slide: currentSlide }));
     }
-  }
-
-  function showSlide(index) {
-    // Update iframes by posting messages
-    if (currentFrame.contentWindow) {
-      currentFrame.contentWindow.postMessage({ type: 'goto', slide: index }, '*');
-    }
-    if (nextFrame.contentWindow && index + 1 < totalSlides) {
-      nextFrame.contentWindow.postMessage({ type: 'goto', slide: index + 1 }, '*');
-    }
-
-    // Update notes
-    if (slidesData[index] && slidesData[index].notes && slidesData[index].notes.length > 0) {
-      notesEl.textContent = slidesData[index].notes.join('\n\n');
-    } else {
-      notesEl.textContent = 'No notes for this slide.';
-    }
-
-    // Update progress
-    progressEl.textContent = 'Slide ' + (index + 1) + ' / ' + totalSlides;
   }
 
   // Timer
@@ -196,10 +209,5 @@ const PRESENTER_JS: &str = r#"
   };
 
   requestAnimationFrame(updateTimer);
-
-  // Request slide data from server
-  ws.onopen = function() {
-    ws.send(JSON.stringify({ type: 'get_slides' }));
-  };
 })();
 "#;

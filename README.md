@@ -16,6 +16,9 @@ slides serve presentation.md
 # Present with speaker notes, timer, and progress
 slides present presentation.md
 
+# Visual editor — create slides in the browser, markdown file updates in real time
+slides edit presentation.md
+
 # Export
 slides export presentation.md -f html -o deck.html
 slides export presentation.md -f pdf -o deck.pdf  # requires --features pdf
@@ -30,6 +33,7 @@ slides export presentation.md -f pdf -o deck.pdf  # requires --features pdf
 - **Semantic styling** — annotate blocks with `{.emphasis}`, `{.callout}`, `{.aside}` and let the theme handle the rest
 - **Themes** — `minimal` (light) and `dark` built-in, customizable via CSS custom properties
 - **Export** — self-contained HTML or PDF via headless Chrome
+- **Visual editor** — `slides edit` opens a browser-based editor with toolbar, layout selector, and live preview; the `.md` file updates in real time
 - **Syntax reference** — visit `/help` in the browser while presenting, or run `slides init` for a commented template
 
 ## Syntax at a glance
@@ -44,6 +48,12 @@ aspect: "16:9"
 # First Slide
 
 Regular markdown: **bold**, *italic*, `code`, tables, lists, footnotes.
+
+--- {class: centered}
+
+# Section Title
+
+Centered slides are great for title pages and dividers.
 
 ^[Inline speaker note — only visible in presenter mode.]
 
@@ -92,6 +102,7 @@ cargo install --path . --features pdf
 | `Home` / `End` | First / last slide |
 | `F` | Fullscreen |
 | `D` | Toggle dark mode |
+| `P` | Open presenter view |
 
 ## License
 

@@ -6,7 +6,7 @@ description = "A CLI tool that renders markdown files as presentations"
 
 [dependencies]
 anyhow = "1"
-axum = { version = "0.8", features = ["ws"] }
+axum = { version = "0.8", features = ["ws", "multipart"] }
 clap = { version = "4", features = ["derive"] }
 minijinja = "2"
 notify = "7"

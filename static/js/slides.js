@@ -111,6 +111,11 @@
         e.preventDefault();
         toggleDarkMode();
         break;
+      case 'p':
+      case 'P':
+        e.preventDefault();
+        window.open('/presenter', '_blank');
+        break;
       case 'Escape':
         if (document.fullscreenElement) {
           document.exitFullscreen();

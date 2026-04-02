@@ -25,6 +25,7 @@ pub struct SlideAttrs {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Slide {
     pub html: String,
     pub attrs: SlideAttrs,

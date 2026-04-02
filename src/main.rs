@@ -1,3 +1,4 @@
+mod editor;
 mod help;
 mod layout;
 mod parser;
@@ -55,6 +56,14 @@ enum Command {
         #[arg(default_value = "presentation.md")]
         file: PathBuf,
     },
+    /// Open the visual editor in the browser
+    Edit {
+        /// Path to the markdown file
+        file: PathBuf,
+        /// Port to serve on
+        #[arg(short, long, default_value = "3030")]
+        port: u16,
+    },
 }
 
 #[tokio::main]
@@ -70,7 +79,7 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Command::Serve { file, port, open } => {
-            server::serve(file, port, open).await?;
+            server::serve(file, port, open, false).await?;
         }
         Command::Export {
             file,
@@ -83,7 +92,20 @@ async fn main() -> Result<()> {
             // Open presenter view, audience gets the root URL
             let url = format!("http://localhost:{}/presenter", port);
             let _ = open::that(&url);
-            server::serve(file, port, false).await?;
+            server::serve(file, port, false, false).await?;
+        }
+        Command::Edit { file, port } => {
+            if !file.exists() {
+                // Create a minimal starter file
+                std::fs::write(
+                    &file,
+                    "---\ntitle: My Presentation\ntheme: minimal\naspect: \"16:9\"\ntransition: slide\n---\n\n# My Presentation\n",
+                )?;
+                tracing::info!("Created {}", file.display());
+            }
+            let url = format!("http://localhost:{}/edit", port);
+            let _ = open::that(&url);
+            server::serve(file, port, false, true).await?;
         }
         Command::Init { file } => {
             if file.exists() {

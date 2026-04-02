@@ -75,6 +75,14 @@ Footnotes work too[^1].
 
 [^1]: This appears at the bottom of the slide.
 
+--- {class: centered}
+
+# Centered Slide
+
+Use `--- {class: centered}` to center all content on a slide.
+
+Perfect for title pages and section dividers.
+
 --- {transition: fade}
 
 ## Transitions
@@ -87,7 +95,7 @@ You can also set `class` and `timing` on separators:
 --- {transition: fade, class: centered, timing: 45s}
 ```
 
---- {class: centered}
+---
 
 ## Semantic Annotations
 
@@ -246,6 +254,7 @@ Two ways to add notes:
 | End              | Last slide          |
 | F                | Toggle fullscreen   |
 | D                | Toggle dark mode    |
+| P                | Open presenter view |
 | Esc              | Exit fullscreen     |
 
 ---
@@ -264,6 +273,9 @@ slides export deck.md -f pdf -o output.pdf
 
 # Presenter mode with notes & timer
 slides present deck.md
+
+# Visual editor in the browser
+slides edit deck.md
 ```
 
 ---
@@ -340,6 +352,14 @@ More content.</code></pre>
 --- {{class: centered}}
 --- {{timing: 45s}}
 --- {{transition: fade, class: centered, timing: 30s}}</code></pre>
+
+        <h3>Centered Slides</h3>
+        <p>Use <code>class: centered</code> to center all content horizontally and vertically — ideal for title pages and section dividers:</p>
+        <pre><code>--- {{class: centered}}
+
+# My Presentation
+
+Subtitle goes here</code></pre>
       </section>
 
       <section id="markdown">
@@ -491,6 +511,7 @@ Supports **markdown** formatting.
           <tr><td><kbd>End</kbd></td><td>Last slide</td></tr>
           <tr><td><kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
           <tr><td><kbd>D</kbd></td><td>Toggle dark mode</td></tr>
+          <tr><td><kbd>P</kbd></td><td>Open presenter view</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Exit fullscreen</td></tr>
         </table>
         <p>Touch: swipe left/right to navigate.</p>
@@ -512,7 +533,10 @@ slides export deck.md -f html -o output.html
 slides export deck.md -f pdf -o output.pdf
 
 # Presenter mode with notes, timer, and progress
-slides present deck.md</code></pre>
+slides present deck.md
+
+# Visual editor — create slides in the browser
+slides edit deck.md</code></pre>
       </section>
 
     </main>

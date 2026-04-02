@@ -7,6 +7,7 @@ use minijinja::{Environment, context};
 use crate::layout::solver::{self, OverflowResult};
 use crate::parser::Deck;
 
+#[allow(dead_code)]
 pub struct RenderedDeck {
     pub html: String,
     pub overflows: Vec<OverflowResult>,
@@ -156,5 +157,82 @@ mod tests {
         let rendered = render_deck(&deck).unwrap();
         let count = rendered.html.matches("<section class=\"slide").count();
         assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_render_centered_class() {
+        let input = "# Normal\n\n--- {class: centered}\n\n# Centered Slide\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        // Second slide should have centered class
+        assert!(
+            rendered.html.contains("class=\"slide centered\""),
+            "Rendered HTML should contain centered class: {}",
+            rendered.html
+        );
+    }
+
+    #[test]
+    fn test_render_block_notes_in_data_attr() {
+        let input = "# Title\n\n:::notes\nBlock speaker note\n:::\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(
+            rendered.html.contains("data-notes=\"Block speaker note\""),
+            "Block notes should appear in data-notes: {}",
+            rendered.html
+        );
+    }
+
+    #[test]
+    fn test_render_notes_not_in_visible_content() {
+        let input = "Visible text\n\n:::notes\nHidden note\n:::\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        // Notes should be in data-notes but not rendered as visible HTML
+        assert!(rendered.html.contains("data-notes=\"Hidden note\""));
+        // The note text should NOT appear in a <p> tag
+        assert!(
+            !rendered.html.contains("<p>Hidden note</p>"),
+            "Notes should not be visible content"
+        );
+    }
+
+    #[test]
+    fn test_render_inline_notes_in_data_attr() {
+        let input = "Some text ^[Inline note here] more text\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(
+            rendered.html.contains("data-notes=\"Inline note here\""),
+            "Inline notes should appear in data-notes: {}",
+            rendered.html
+        );
+        // Inline note should be stripped from visible content
+        assert!(
+            !rendered.html.contains("^["),
+            "Inline note syntax should be stripped"
+        );
+    }
+
+    #[test]
+    fn test_render_unchanged_html_is_equal() {
+        // Rendering the same input twice should produce identical HTML
+        // (important for watcher's content-comparison optimization)
+        let input = "---\ntitle: Test\n---\n\n# Slide 1\n\n---\n\n# Slide 2\n";
+        let deck1 = parser::parse(input).unwrap();
+        let rendered1 = render_deck(&deck1).unwrap();
+        let deck2 = parser::parse(input).unwrap();
+        let rendered2 = render_deck(&deck2).unwrap();
+        assert_eq!(rendered1.html, rendered2.html, "Same input should produce identical HTML");
+    }
+
+    #[test]
+    fn test_render_different_content_produces_different_html() {
+        let input1 = "# Slide A\n";
+        let input2 = "# Slide B\n";
+        let rendered1 = render_deck(&parser::parse(input1).unwrap()).unwrap();
+        let rendered2 = render_deck(&parser::parse(input2).unwrap()).unwrap();
+        assert_ne!(rendered1.html, rendered2.html, "Different input should produce different HTML");
     }
 }
