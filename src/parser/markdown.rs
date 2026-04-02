@@ -1,5 +1,8 @@
 use pulldown_cmark::{html, Options, Parser};
 
+/// Marker inserted for `+` list items so we can find them in the HTML output.
+const FRAGMENT_MARKER: &str = "\u{FEFF}";
+
 /// Render markdown to HTML, applying semantic style annotations.
 pub fn render(markdown: &str) -> String {
     let (cleaned, annotations) = extract_annotations(markdown);
@@ -15,7 +18,43 @@ pub fn render(markdown: &str) -> String {
     let mut html_output = String::new();
     html::push_html(&mut html_output, parser);
 
-    apply_annotations(&html_output, &annotations)
+    let html_output = apply_annotations(&html_output, &annotations);
+    apply_fragment_markers(&html_output)
+}
+
+/// Replace fragment markers with actual class attributes on `<li>` tags.
+/// Handles both bare `<li>` and `<li class="existing">` cases.
+fn apply_fragment_markers(html: &str) -> String {
+    let marker = FRAGMENT_MARKER;
+    let mut result = String::with_capacity(html.len());
+    let mut remaining = html;
+
+    while let Some(pos) = remaining.find(marker) {
+        // Look backwards for the `<li` that owns this marker
+        let before = &remaining[..pos];
+        if let Some(li_start) = before.rfind("<li") {
+            let tag_region = &remaining[li_start..pos];
+            if let Some(class_pos) = tag_region.find("class=\"") {
+                // Already has a class — append fragment to it
+                let abs_class = li_start + class_pos + 7; // after `class="`
+                result.push_str(&remaining[..abs_class]);
+                result.push_str("fragment ");
+                result.push_str(&remaining[abs_class..pos]);
+            } else {
+                // No class yet — add one to the <li> tag
+                let tag_close = before[li_start..].find('>').unwrap() + li_start;
+                result.push_str(&remaining[..tag_close]);
+                result.push_str(" class=\"fragment\"");
+                result.push_str(&remaining[tag_close..pos]);
+            }
+        } else {
+            result.push_str(before);
+        }
+        // Skip the marker character
+        remaining = &remaining[pos + marker.len()..];
+    }
+    result.push_str(remaining);
+    result
 }
 
 /// An annotation extracted from a markdown line.
@@ -23,7 +62,8 @@ struct Annotation {
     classes: Vec<String>,
 }
 
-/// Pre-process markdown to extract `{.class1 .class2}` from line endings.
+/// Pre-process markdown to extract `{.class1 .class2}` from line endings
+/// and convert `+ item` list markers into `- ` items with a fragment marker.
 /// Returns cleaned markdown and a list of annotations with their line indices.
 fn extract_annotations(markdown: &str) -> (String, Vec<Annotation>) {
     let mut cleaned = String::new();
@@ -31,7 +71,17 @@ fn extract_annotations(markdown: &str) -> (String, Vec<Annotation>) {
 
     for line in markdown.lines() {
         let trimmed = line.trim_end();
-        if let Some((before, classes)) = parse_trailing_annotation(trimmed) {
+
+        // Detect `+ ` list markers — these become fragment items.
+        // Insert a marker character that we find in the HTML output later.
+        let working_line = if let Some(rest) = strip_plus_marker(trimmed) {
+            let indent = &trimmed[..trimmed.len() - trimmed.trim_start().len()];
+            format!("{}- {}{}", indent, FRAGMENT_MARKER, rest)
+        } else {
+            trimmed.to_string()
+        };
+
+        if let Some((before, classes)) = parse_trailing_annotation(&working_line) {
             if !classes.is_empty() {
                 annotations.push(Annotation { classes });
                 cleaned.push_str(before);
@@ -39,11 +89,18 @@ fn extract_annotations(markdown: &str) -> (String, Vec<Annotation>) {
                 continue;
             }
         }
-        cleaned.push_str(line);
+
+        cleaned.push_str(&working_line);
         cleaned.push('\n');
     }
 
     (cleaned, annotations)
+}
+
+/// If the line is a `+ ` list item, return the content after the marker.
+fn strip_plus_marker(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    trimmed.strip_prefix("+ ")
 }
 
 /// Parse a trailing `{.class1 .class2}` from a line.
@@ -180,9 +237,41 @@ mod tests {
     }
 
     #[test]
-    fn test_fragment_class() {
+    fn test_fragment_class_legacy() {
         let result = render("- item {.fragment}");
         assert!(result.contains("fragment"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_plus_marker_fragment() {
+        let result = render("+ revealed item");
+        assert!(result.contains("fragment"), "Got: {}", result);
+        assert!(result.contains("revealed item"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_plus_marker_mixed_list() {
+        let result = render("- normal\n+ revealed\n- also normal");
+        // Only the middle item should be a fragment
+        assert_eq!(result.matches("class=\"fragment\"").count(), 1, "Got: {}", result);
+        assert!(result.contains("<li class=\"fragment\">revealed</li>"), "Got: {}", result);
+        assert!(result.contains("<li>normal</li>"), "Got: {}", result);
+        assert!(result.contains("<li>also normal</li>"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_plus_marker_with_annotation() {
+        let result = render("+ item {.highlight}");
+        assert!(result.contains("fragment"), "Got: {}", result);
+        assert!(result.contains("highlight"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_strip_plus_marker() {
+        assert_eq!(strip_plus_marker("+ hello"), Some("hello"));
+        assert_eq!(strip_plus_marker("  + nested"), Some("nested"));
+        assert_eq!(strip_plus_marker("- normal"), None);
+        assert_eq!(strip_plus_marker("+no space"), None);
     }
 
     #[test]

@@ -56,9 +56,11 @@ fn main() {
 
 > You annotate *intent*, not CSS. Themes handle the rest.
 
-Regular text flows normally between styled blocks.
++ This point reveals on click
++ Then this one
++ And finally this
 
-This paragraph is supplementary context.
+Regular text flows normally between styled blocks.
 
 ---
 

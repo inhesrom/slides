@@ -103,11 +103,11 @@ This is supplementary context. {.aside}
 
 ## Fragment Reveals
 
-Fragments appear one at a time when you press next:
+Use `+` instead of `-` for list items that appear one at a time:
 
-- First point {.fragment}
-- Second point {.fragment}
-- Third point {.fragment}
++ First point
++ Second point
++ Third point
 
 Press → to reveal each fragment before advancing.
 
@@ -397,15 +397,17 @@ fn main() {{
 
 &gt; This is styled as a callout. {{.callout}}
 
-This is secondary text. {{.aside}}
-
-- Appears on next press {{.fragment}}
-- Also revealed step-by-step {{.fragment}}</code></pre>
+This is secondary text. {{.aside}}</code></pre>
         <p>Multiple classes: <code>{{.callout .warning}}</code></p>
+
+        <h3>Fragment Reveals</h3>
+        <p>Use <code>+</code> instead of <code>-</code> as the list marker. Fragment items appear one at a time on keypress:</p>
+        <pre><code>+ First point
++ Second point
++ Third point</code></pre>
 
         <h3>Built-in Classes</h3>
         <table>
-          <tr><td><code>.fragment</code></td><td>Revealed one-by-one on keypress</td></tr>
           <tr><td><code>.emphasis</code></td><td>Visual emphasis (theme-dependent)</td></tr>
           <tr><td><code>.callout</code></td><td>Highlighted callout block</td></tr>
           <tr><td><code>.aside</code></td><td>De-emphasized secondary text</td></tr>

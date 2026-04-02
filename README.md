@@ -26,7 +26,7 @@ slides export presentation.md -f pdf -o deck.pdf  # requires --features pdf
 - **Live preview** — saves trigger instant reload in the browser
 - **Layouts** — split columns (`:::split 60/40`), grids (`:::grid 2x2`), vertical stacks (`:::stack`)
 - **Speaker notes** — block (`:::notes`) or inline (`^[note]`), shown in presenter mode with a timer
-- **Fragment reveals** — step through `{.fragment}` elements before advancing
+- **Fragment reveals** — use `+` as a list marker for items that appear one at a time
 - **Semantic styling** — annotate blocks with `{.emphasis}`, `{.callout}`, `{.aside}` and let the theme handle the rest
 - **Themes** — `minimal` (light) and `dark` built-in, customizable via CSS custom properties
 - **Export** — self-contained HTML or PDF via headless Chrome
@@ -67,9 +67,9 @@ Supporting content goes here.
 
 ## Reveals
 
-- First point {.fragment}
-- Second point {.fragment}
-- Third point {.fragment}
++ First point
++ Second point
++ Third point
 ```
 
 Full syntax reference: run `slides serve` and visit `http://localhost:3030/help`.
