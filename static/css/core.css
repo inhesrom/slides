@@ -184,7 +184,6 @@ em { font-style: italic; }
 /* Centered slide variant */
 .slide.centered {
   text-align: center;
-  align-items: center;
   justify-content: center;
 }
 

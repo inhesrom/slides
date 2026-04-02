@@ -743,6 +743,7 @@ const EDITOR_JS: &str = r##"
   new ResizeObserver(scalePreview).observe(previewContainer);
 
   window.togglePreview = function() {
+    previewPanel.style.width = '';
     previewPanel.classList.toggle('collapsed');
     var btn = document.getElementById('preview-toggle');
     btn.textContent = previewPanel.classList.contains('collapsed') ? '\u25B6' : '\u25C0';
