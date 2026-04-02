@@ -12,10 +12,14 @@ pub fn presenter_html(deck_title: &str) -> String {
 <body>
   <div class="presenter">
     <div class="main-panel">
-      <iframe id="current-slide" class="slide-frame current"></iframe>
+      <div class="slide-container" id="current-container">
+        <iframe id="current-slide" class="slide-frame"></iframe>
+      </div>
     </div>
     <div class="side-panel">
-      <iframe id="next-slide" class="slide-frame next"></iframe>
+      <div class="slide-container next-container" id="next-container">
+        <iframe id="next-slide" class="slide-frame"></iframe>
+      </div>
       <div class="info-panel">
         <div class="notes" id="notes">
           <h3>Speaker Notes</h3>
@@ -43,13 +47,21 @@ pub fn presenter_html(deck_title: &str) -> String {
 
 const PRESENTER_CSS: &str = r#"
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
 body { background: #1a1a2e; color: #e2e8f0; font-family: system-ui, sans-serif; }
 .presenter { display: grid; grid-template-columns: 2fr 1fr; height: 100vh; gap: 1rem; padding: 1rem; }
 .main-panel { display: flex; align-items: center; justify-content: center; }
-.side-panel { display: flex; flex-direction: column; gap: 1rem; }
-.slide-frame { border: 2px solid #334155; border-radius: 8px; background: white; width: 100%; }
-.slide-frame.current { height: 100%; aspect-ratio: 16/9; }
-.slide-frame.next { height: 40%; aspect-ratio: 16/9; opacity: 0.8; }
+.side-panel { display: flex; flex-direction: column; gap: 1rem; min-height: 0; }
+
+/* Slide containers scale the full-size iframe to fit */
+.slide-container { position: relative; overflow: hidden; border: 2px solid #334155; border-radius: 8px; width: 100%; aspect-ratio: 16/9; }
+.main-panel .slide-container { height: 100%; width: auto; aspect-ratio: 16/9; max-width: 100%; }
+.next-container { opacity: 0.8; }
+.slide-label { position: absolute; top: 0.4rem; left: 0.6rem; font-size: 0.65rem; color: #94a3b8; background: rgba(15,23,42,0.7); padding: 0.15rem 0.4rem; border-radius: 3px; z-index: 2; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Iframes render at full presentation size, scaled down */
+.slide-frame { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: none; transform-origin: top left; }
+
 .info-panel { flex: 1; display: flex; flex-direction: column; gap: 1rem; }
 .notes { flex: 1; background: #0f172a; border-radius: 8px; padding: 1.5rem; overflow-y: auto; }
 .notes h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.75rem; }
@@ -65,18 +77,43 @@ body { background: #1a1a2e; color: #e2e8f0; font-family: system-ui, sans-serif; 
 const PRESENTER_JS: &str = r#"
 (function() {
   var currentSlide = 0;
+  var currentFragments = 0; // how many fragments are currently visible
   var totalSlides = 0;
-  var slidesData = [];
+  var slidesData = []; // [{notes, fragmentCount}, ...]
   var timerStart = Date.now();
   var timerRunning = true;
   var timerOffset = 0;
 
   var currentFrame = document.getElementById('current-slide');
   var nextFrame = document.getElementById('next-slide');
+  var currentContainer = document.getElementById('current-container');
+  var nextContainer = document.getElementById('next-container');
   var notesEl = document.getElementById('notes-content');
   var timerEl = document.getElementById('timer');
   var progressEl = document.getElementById('progress');
   var timerBtn = document.getElementById('timer-btn');
+
+  var SLIDE_W = 1920;
+  var SLIDE_H = 1080;
+  var presenterSyncId = Math.random().toString(36).substr(2, 9);
+
+  // Scale iframes to fit their containers
+  function scaleFrames() {
+    scaleFrame(currentFrame, currentContainer);
+    scaleFrame(nextFrame, nextContainer);
+  }
+
+  function scaleFrame(frame, container) {
+    var cw = container.clientWidth;
+    var ch = container.clientHeight;
+    if (cw === 0 || ch === 0) return;
+    var scale = Math.min(cw / SLIDE_W, ch / SLIDE_H);
+    frame.style.transform = 'scale(' + scale + ')';
+  }
+
+  window.addEventListener('resize', scaleFrames);
+  new ResizeObserver(scaleFrames).observe(currentContainer);
+  new ResizeObserver(scaleFrames).observe(nextContainer);
 
   // Connect to the server for reload/navigate events
   var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -87,8 +124,10 @@ const PRESENTER_JS: &str = r#"
     try { data = JSON.parse(event.data); } catch(e) { return; }
     if (data.type === 'reload') {
       currentFrame.src = '/';
-    } else if (data.type === 'navigate') {
+    } else if (data.type === 'sync' && data.origin !== presenterSyncId) {
+      // Incoming sync from audience view — follow their navigation
       currentSlide = data.slide;
+      currentFragments = typeof data.fragments === 'number' ? data.fragments : 0;
       updatePresenterView();
     }
   };
@@ -97,13 +136,25 @@ const PRESENTER_JS: &str = r#"
     setTimeout(function() { location.reload(); }, 1000);
   };
 
-  // Load the main deck in the current iframe
+  // Load the deck in both iframes
   currentFrame.src = '/';
+  nextFrame.src = '/';
 
-  // Once the iframe loads, extract slide data (notes, count) from its DOM
+  // Once the current iframe loads, extract slide data and update view
+  var currentLoaded = false;
+  var nextLoaded = false;
+
   currentFrame.addEventListener('load', function() {
+    currentLoaded = true;
     extractSlideData();
-    updatePresenterView();
+    scaleFrames();
+    if (nextLoaded) updatePresenterView();
+  });
+
+  nextFrame.addEventListener('load', function() {
+    nextLoaded = true;
+    scaleFrames();
+    if (currentLoaded) updatePresenterView();
   });
 
   function extractSlideData() {
@@ -114,7 +165,8 @@ const PRESENTER_JS: &str = r#"
       slidesData = [];
       for (var i = 0; i < slides.length; i++) {
         slidesData.push({
-          notes: slides[i].getAttribute('data-notes') || ''
+          notes: slides[i].getAttribute('data-notes') || '',
+          fragmentCount: slides[i].querySelectorAll('.fragment').length
         });
       }
     } catch(e) {
@@ -123,15 +175,15 @@ const PRESENTER_JS: &str = r#"
   }
 
   function updatePresenterView() {
-    // Navigate the current iframe to the right slide
+    // Navigate the current iframe to the right slide with current fragment state
     if (currentFrame.contentWindow) {
-      currentFrame.contentWindow.postMessage({ type: 'goto', slide: currentSlide }, '*');
+      currentFrame.contentWindow.postMessage({
+        type: 'goto', slide: currentSlide, fragments: currentFragments
+      }, '*');
     }
 
-    // Load next slide preview
-    if (currentSlide + 1 < totalSlides) {
-      nextFrame.src = '/#/' + (currentSlide + 1);
-    }
+    // Show next preview: what happens on the next keypress?
+    updateNextPreview();
 
     // Update notes
     if (slidesData[currentSlide] && slidesData[currentSlide].notes) {
@@ -141,7 +193,34 @@ const PRESENTER_JS: &str = r#"
     }
 
     // Update progress
-    progressEl.textContent = 'Slide ' + (currentSlide + 1) + ' / ' + totalSlides;
+    var fragInfo = '';
+    var sd = slidesData[currentSlide];
+    if (sd && sd.fragmentCount > 0) {
+      fragInfo = ' (fragment ' + currentFragments + '/' + sd.fragmentCount + ')';
+    }
+    progressEl.textContent = 'Slide ' + (currentSlide + 1) + ' / ' + totalSlides + fragInfo;
+  }
+
+  function updateNextPreview() {
+    var sd = slidesData[currentSlide];
+    var hasMoreFragments = sd && currentFragments < sd.fragmentCount;
+
+    if (hasMoreFragments) {
+      // Next action reveals another fragment on the same slide
+      // Show current slide with one more fragment revealed
+      if (nextFrame.contentWindow) {
+        nextFrame.contentWindow.postMessage({
+          type: 'goto', slide: currentSlide, fragments: currentFragments + 1
+        }, '*');
+      }
+    } else if (currentSlide + 1 < totalSlides) {
+      // Next action goes to the next slide
+      if (nextFrame.contentWindow) {
+        nextFrame.contentWindow.postMessage({
+          type: 'goto', slide: currentSlide + 1, fragments: 0
+        }, '*');
+      }
+    }
   }
 
   // Keyboard navigation
@@ -152,24 +231,52 @@ const PRESENTER_JS: &str = r#"
       case ' ':
       case 'PageDown':
         e.preventDefault();
-        navigate(1);
+        navigateForward();
         break;
       case 'ArrowLeft':
       case 'ArrowUp':
       case 'PageUp':
         e.preventDefault();
-        navigate(-1);
+        navigateBackward();
         break;
     }
   });
 
-  function navigate(delta) {
-    var newIdx = currentSlide + delta;
-    if (newIdx >= 0 && newIdx < totalSlides) {
-      currentSlide = newIdx;
-      updatePresenterView();
-      ws.send(JSON.stringify({ type: 'navigate', slide: currentSlide }));
+  function navigateForward() {
+    var sd = slidesData[currentSlide];
+    if (sd && currentFragments < sd.fragmentCount) {
+      currentFragments++;
+    } else if (currentSlide + 1 < totalSlides) {
+      currentSlide++;
+      currentFragments = 0;
+    } else {
+      return;
     }
+    updatePresenterView();
+    broadcastSync();
+  }
+
+  function navigateBackward() {
+    if (currentFragments > 0) {
+      currentFragments--;
+    } else if (currentSlide > 0) {
+      currentSlide--;
+      var sd = slidesData[currentSlide];
+      currentFragments = sd ? sd.fragmentCount : 0;
+    } else {
+      return;
+    }
+    updatePresenterView();
+    broadcastSync();
+  }
+
+  function broadcastSync() {
+    ws.send(JSON.stringify({
+      type: 'sync',
+      slide: currentSlide,
+      fragments: currentFragments,
+      origin: presenterSyncId
+    }));
   }
 
   // Timer
@@ -209,5 +316,6 @@ const PRESENTER_JS: &str = r#"
   };
 
   requestAnimationFrame(updateTimer);
+  setTimeout(scaleFrames, 500);
 })();
 "#;

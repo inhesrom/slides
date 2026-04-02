@@ -27,6 +27,12 @@ pub fn serialize_deck(deck: &EditorDeck) -> String {
     if deck.config.export_images != "relative" {
         out.push_str(&format!("export_images: {}\n", deck.config.export_images));
     }
+    if deck.config.title_size != "67px" {
+        out.push_str(&format!("title_size: \"{}\"\n", deck.config.title_size));
+    }
+    if deck.config.body_size != "28px" {
+        out.push_str(&format!("body_size: \"{}\"\n", deck.config.body_size));
+    }
     out.push_str("---\n");
 
     // Slides
@@ -139,6 +145,8 @@ mod tests {
             color_scheme: "light".to_string(),
             auto_fit: "warn".to_string(),
             export_images: "relative".to_string(),
+            title_size: "67px".to_string(),
+            body_size: "28px".to_string(),
         }
     }
 

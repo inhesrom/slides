@@ -20,6 +20,8 @@ pub struct EditorConfig {
     pub color_scheme: String,
     pub auto_fit: String,
     pub export_images: String,
+    pub title_size: String,
+    pub body_size: String,
 }
 
 impl From<&DeckConfig> for EditorConfig {
@@ -36,6 +38,8 @@ impl From<&DeckConfig> for EditorConfig {
             color_scheme: config.color_scheme.clone(),
             auto_fit: config.auto_fit.clone(),
             export_images: config.export_images.clone(),
+            title_size: config.title_size.clone(),
+            body_size: config.body_size.clone(),
         }
     }
 }

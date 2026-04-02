@@ -387,6 +387,8 @@ mod tests {
                 color_scheme: "light".to_string(),
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
+                title_size: "67px".to_string(),
+                body_size: "28px".to_string(),
             },
             slides: vec![
                 EditorSlide {
@@ -419,6 +421,8 @@ mod tests {
                 color_scheme: "dark".to_string(),
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
+                title_size: "67px".to_string(),
+                body_size: "28px".to_string(),
             },
             slides: vec![EditorSlide {
                 content: "# Title".to_string(),
@@ -444,6 +448,8 @@ mod tests {
                 color_scheme: "light".to_string(),
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
+                title_size: "67px".to_string(),
+                body_size: "28px".to_string(),
             },
             slides: vec![EditorSlide {
                 layout: Some(EditorLayout {
@@ -476,6 +482,8 @@ mod tests {
                 color_scheme: "light".to_string(),
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
+                title_size: "67px".to_string(),
+                body_size: "28px".to_string(),
             },
             slides: vec![
                 EditorSlide {
@@ -509,6 +517,8 @@ mod tests {
                 color_scheme: "light".to_string(),
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
+                title_size: "67px".to_string(),
+                body_size: "28px".to_string(),
             },
             slides: vec![
                 EditorSlide {

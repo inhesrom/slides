@@ -22,6 +22,19 @@ pub fn editor_html() -> String {
         <label>Aspect <select id="cfg-aspect"><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label>
         <label>Transition <select id="cfg-transition"><option value="slide">Slide</option><option value="fade">Fade</option><option value="none">None</option></select></label>
         <label>Color <select id="cfg-color"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label>Title Size <select id="cfg-title-size" onchange="scheduleSave()">
+          <option value="50px">Small</option>
+          <option value="67px">Medium</option>
+          <option value="90px">Large</option>
+          <option value="112px">X-Large</option>
+        </select></label>
+        <label>Body Size <select id="cfg-body-size" onchange="scheduleSave()">
+          <option value="20px">Small</option>
+          <option value="24px">Medium</option>
+          <option value="28px">Default</option>
+          <option value="32px">Large</option>
+          <option value="36px">X-Large</option>
+        </select></label>
       </div>
       <div class="topbar-right">
         <span class="status" id="save-status">Connected</span>
@@ -42,7 +55,6 @@ pub fn editor_html() -> String {
             <button class="btn-sm" onclick="moveSlideUp()" title="Move up">&#9650;</button>
             <button class="btn-sm" onclick="moveSlideDown()" title="Move down">&#9660;</button>
             <button class="btn-sm btn-danger" onclick="deleteSlide()" title="Delete slide">&#10005;</button>
-            <button class="btn-sm" onclick="togglePreview()" id="preview-toggle" title="Toggle preview">&#9664;</button>
           </div>
         </div>
         <div class="field-row">
@@ -84,6 +96,7 @@ pub fn editor_html() -> String {
           <button onclick="toolImage()" title="Insert image">&#128247;</button>
           <button onclick="toolTable()" title="Insert table">&#9638;</button>
         </div>
+        <div class="overflow-warning hidden" id="overflow-warning">Slide content exceeds available space</div>
         <div id="content-area">
           <textarea id="content" class="editor-textarea" placeholder="Slide content (markdown)..." oninput="scheduleSave()"></textarea>
         </div>
@@ -97,11 +110,13 @@ pub fn editor_html() -> String {
         <div class="resize-handle" id="resize-handle"></div>
         <div class="preview-header">
           <span>Live Preview</span>
+          <button class="btn-sm" onclick="togglePreview()" id="preview-toggle" title="Hide preview">&#9654;</button>
         </div>
         <div class="preview-container" id="preview-container">
           <iframe id="preview-frame" src="/"></iframe>
         </div>
       </aside>
+      <button class="preview-restore" id="preview-restore" onclick="togglePreview()" title="Show preview">&#9664;</button>
     </div>
   </div>
   <input type="file" id="file-input" style="display:none" accept="image/*" onchange="handleFileSelect(event)">
@@ -134,7 +149,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .status.saving { color: #eab308; }
 
 /* Main layout */
-.main-panels { display: flex; flex: 1; overflow: hidden; }
+.main-panels { display: flex; flex: 1; overflow: hidden; position: relative; }
 
 /* Slide list sidebar */
 .slide-list { width: 180px; min-width: 180px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; }
@@ -189,6 +204,9 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 /* Preview */
 .preview-panel { width: 38%; min-width: 200px; display: flex; flex-direction: column; border-left: 1px solid #334155; position: relative; transition: width 0.2s, min-width 0.2s; }
 .preview-panel.collapsed { width: 0; min-width: 0; overflow: hidden; border-left: none; }
+.preview-restore { display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: #334155; border: 1px solid #475569; color: #e2e8f0; width: 24px; height: 48px; border-radius: 4px 0 0 4px; cursor: pointer; font-size: 0.75rem; z-index: 5; }
+.preview-restore:hover { background: #475569; }
+.preview-panel.collapsed ~ .preview-restore { display: block; }
 .preview-header { padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 600; color: #94a3b8; background: #1e293b; border-bottom: 1px solid #334155; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center; }
 .preview-controls { display: flex; gap: 0.25rem; }
 
@@ -200,6 +218,10 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .preview-panel { position: relative; }
 .resize-handle { width: 5px; cursor: col-resize; background: transparent; position: absolute; left: -3px; top: 0; bottom: 0; z-index: 10; }
 .resize-handle:hover, .resize-handle.dragging { background: #7dd3fc; }
+
+/* Overflow warning */
+.overflow-warning { background: #7f1d1d; color: #fca5a5; padding: 0.4rem 0.75rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; flex-shrink: 0; }
+.overflow-warning.hidden { display: none; }
 
 /* Drag over indicator */
 .drag-over { border-color: #7dd3fc !important; background: #1e293b !important; }
@@ -379,6 +401,8 @@ const EDITOR_JS: &str = r##"
     document.getElementById('cfg-aspect').value = deck.config.aspect;
     document.getElementById('cfg-transition').value = deck.config.transition;
     document.getElementById('cfg-color').value = deck.config.color_scheme;
+    document.getElementById('cfg-title-size').value = deck.config.title_size || '67px';
+    document.getElementById('cfg-body-size').value = deck.config.body_size || '28px';
   }
 
   function refreshPreview() {
@@ -387,6 +411,33 @@ const EDITOR_JS: &str = r##"
     lastPreviewRefresh = now;
     previewFrame.src = '/#/' + selectedSlide;
   }
+
+  // --- Overflow detection ---
+  var overflowWarning = document.getElementById('overflow-warning');
+
+  function checkOverflow() {
+    try {
+      var doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+      if (!doc) return;
+      var slides = doc.querySelectorAll('.slide');
+      var slide = slides[selectedSlide];
+      if (!slide) return;
+      var isOverflowing = slide.scrollHeight > slide.clientHeight;
+      if (isOverflowing) {
+        overflowWarning.classList.remove('hidden');
+        contentEl.style.borderColor = '#dc2626';
+      } else {
+        overflowWarning.classList.add('hidden');
+        contentEl.style.borderColor = '';
+      }
+    } catch(e) {
+      // Cross-origin or not loaded
+    }
+  }
+
+  previewFrame.addEventListener('load', function() {
+    setTimeout(checkOverflow, 200);
+  });
 
   // --- Sync state from DOM ---
   function syncFromDOM() {
@@ -415,6 +466,8 @@ const EDITOR_JS: &str = r##"
     deck.config.aspect = document.getElementById('cfg-aspect').value;
     deck.config.transition = document.getElementById('cfg-transition').value;
     deck.config.color_scheme = document.getElementById('cfg-color').value;
+    deck.config.title_size = document.getElementById('cfg-title-size').value;
+    deck.config.body_size = document.getElementById('cfg-body-size').value;
   }
 
   // --- Persistence ---
@@ -745,8 +798,6 @@ const EDITOR_JS: &str = r##"
   window.togglePreview = function() {
     previewPanel.style.width = '';
     previewPanel.classList.toggle('collapsed');
-    var btn = document.getElementById('preview-toggle');
-    btn.textContent = previewPanel.classList.contains('collapsed') ? '\u25B6' : '\u25C0';
     setTimeout(scalePreview, 250);
   };
 

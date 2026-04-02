@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title | default("Slides") }}</title>
-  <style>{{ core_css | safe }}{{ theme_css | safe }}</style>
+  <style>{{ core_css | safe }}{{ theme_css | safe }}
+:root { --title-size: {{ title_size }}; --body-size: {{ body_size }}; }</style>
 </head>
 <body class="deck aspect-{{ aspect }}">
   {% for slide in slides %}

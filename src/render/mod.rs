@@ -57,10 +57,15 @@ pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
     let aspect = deck.config.aspect.class_name();
     let color_scheme = &deck.config.color_scheme;
 
+    let title_size = &deck.config.title_size;
+    let body_size = &deck.config.body_size;
+
     let html = tmpl.render(context! {
         title => title,
         aspect => aspect,
         color_scheme => color_scheme,
+        title_size => title_size,
+        body_size => body_size,
         core_css => core_css,
         theme_css => theme_css,
         slides_js => slides_js,

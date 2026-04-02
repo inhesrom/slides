@@ -86,20 +86,24 @@
       case 'PageDown':
         e.preventDefault();
         next();
+        broadcastSync();
         break;
       case 'ArrowLeft':
       case 'ArrowUp':
       case 'PageUp':
         e.preventDefault();
         prev();
+        broadcastSync();
         break;
       case 'Home':
         e.preventDefault();
         showSlide(0);
+        broadcastSync();
         break;
       case 'End':
         e.preventDefault();
         showSlide(total - 1);
+        broadcastSync();
         break;
       case 'f':
       case 'F':
@@ -152,6 +156,7 @@
     var dx = e.changedTouches[0].screenX - touchStartX;
     if (Math.abs(dx) > 50) {
       if (dx > 0) prev(); else next();
+      broadcastSync();
     }
   });
 
@@ -160,10 +165,17 @@
     showSlide(readHash());
   });
 
-  // WebSocket for live reload
+  // WebSocket for live reload and sync
+  // Skip WebSocket when embedded in an iframe (presenter controls us via postMessage)
+  var isEmbedded = window.parent !== window;
+  var ws = null;
+  var syncId = Math.random().toString(36).substr(2, 9);
+
   function connectWS() {
+    if (isEmbedded) return;
+
     var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var ws = new WebSocket(protocol + '//' + location.host + '/ws');
+    ws = new WebSocket(protocol + '//' + location.host + '/ws');
 
     ws.onmessage = function(event) {
       var data;
@@ -172,6 +184,18 @@
         location.reload();
       } else if (data.type === 'navigate') {
         showSlide(data.slide);
+      } else if (data.type === 'sync' && data.origin !== syncId) {
+        // Sync from presenter or another view — jump to exact state
+        showSlide(data.slide);
+        var frags = getFragments();
+        var count = typeof data.fragments === 'number' ? data.fragments : 0;
+        for (var fi = 0; fi < frags.length; fi++) {
+          if (fi < count) {
+            frags[fi].classList.add('visible');
+          } else {
+            frags[fi].classList.remove('visible');
+          }
+        }
       }
     };
 
@@ -184,10 +208,37 @@
     };
   }
 
+  // Broadcast current state after local navigation
+  function broadcastSync() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    var frags = getFragments();
+    var visibleCount = 0;
+    for (var i = 0; i < frags.length; i++) {
+      if (frags[i].classList.contains('visible')) visibleCount++;
+    }
+    ws.send(JSON.stringify({
+      type: 'sync',
+      slide: current,
+      fragments: visibleCount,
+      origin: syncId
+    }));
+  }
+
   // Listen for postMessage from presenter view
   window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'goto' && typeof e.data.slide === 'number') {
       showSlide(e.data.slide);
+      // Optionally reveal a specific number of fragments
+      if (typeof e.data.fragments === 'number') {
+        var frags = getFragments();
+        for (var i = 0; i < frags.length; i++) {
+          if (i < e.data.fragments) {
+            frags[i].classList.add('visible');
+          } else {
+            frags[i].classList.remove('visible');
+          }
+        }
+      }
     }
   });
 

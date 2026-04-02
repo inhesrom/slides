@@ -12,6 +12,8 @@ pub struct DeckConfig {
     pub color_scheme: String,
     pub auto_fit: String,
     pub export_images: String,
+    pub title_size: String,
+    pub body_size: String,
 }
 
 impl Default for DeckConfig {
@@ -25,6 +27,8 @@ impl Default for DeckConfig {
             color_scheme: "light".to_string(),
             auto_fit: "warn".to_string(),
             export_images: "relative".to_string(),
+            title_size: "67px".to_string(),
+            body_size: "28px".to_string(),
         }
     }
 }
