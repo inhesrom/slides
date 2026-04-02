@@ -87,6 +87,13 @@ Full syntax reference: run `slides serve` and visit `http://localhost:3030/help`
 ## Install
 
 ```bash
+# One-line install (macOS Apple Silicon / Linux x86_64)
+curl -fsSL https://raw.githubusercontent.com/inhesrom/slides/master/install.sh | bash
+
+# Update to latest
+slides update
+
+# Or build from source
 cargo install --path .
 
 # With PDF export support

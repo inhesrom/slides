@@ -5,6 +5,7 @@ mod parser;
 mod presenter;
 mod render;
 mod server;
+mod update;
 
 use std::path::PathBuf;
 
@@ -12,7 +13,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "slides", about = "Markdown presentations, done right")]
+#[command(name = "slides", version, about = "Markdown presentations, done right")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -64,6 +65,10 @@ enum Command {
         #[arg(short, long, default_value = "3030")]
         port: u16,
     },
+    /// Update to the latest release from GitHub
+    Update,
+    /// Reinstall the latest release (even if already up to date)
+    Reinstall,
 }
 
 #[tokio::main]
@@ -89,14 +94,12 @@ async fn main() -> Result<()> {
             render::export::export(&file, &format, output.as_deref())?;
         }
         Command::Present { file, port } => {
-            // Open presenter view, audience gets the root URL
             let url = format!("http://localhost:{}/presenter", port);
             let _ = open::that(&url);
             server::serve(file, port, false, false).await?;
         }
         Command::Edit { file, port } => {
             if !file.exists() {
-                // Create a minimal starter file
                 std::fs::write(
                     &file,
                     "---\ntitle: My Presentation\ntheme: minimal\naspect: \"16:9\"\ntransition: slide\n---\n\n# My Presentation\n",
@@ -115,6 +118,12 @@ async fn main() -> Result<()> {
             tracing::info!("Created {}", file.display());
             println!("Created {}", file.display());
             println!("Run `slides serve {}` to preview.", file.display());
+        }
+        Command::Update => {
+            update::self_update(false)?;
+        }
+        Command::Reinstall => {
+            update::self_update(true)?;
         }
     }
 
