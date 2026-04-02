@@ -10,6 +10,7 @@ use axum::{
 use tokio::sync::broadcast;
 
 use super::SharedDeck;
+use crate::help;
 use crate::presenter;
 
 #[derive(Clone)]
@@ -41,6 +42,7 @@ pub fn create_router(
 
     Router::new()
         .route("/", get(index))
+        .route("/help", get(help_view))
         .route("/presenter", get(presenter_view))
         .route("/ws", get(ws_handler))
         .fallback_service(serve_dir)
@@ -50,6 +52,10 @@ pub fn create_router(
 async fn index(State(state): State<AppState>) -> impl IntoResponse {
     let deck = state.deck.read().await;
     Html(deck.html.clone())
+}
+
+async fn help_view() -> impl IntoResponse {
+    Html(help::help_html())
 }
 
 async fn presenter_view(State(state): State<AppState>) -> impl IntoResponse {

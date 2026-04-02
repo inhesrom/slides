@@ -1,3 +1,4 @@
+mod help;
 mod layout;
 mod parser;
 mod presenter;
@@ -48,6 +49,12 @@ enum Command {
         #[arg(short, long, default_value = "3030")]
         port: u16,
     },
+    /// Create a new presentation from a starter template
+    Init {
+        /// Output file path
+        #[arg(default_value = "presentation.md")]
+        file: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -77,6 +84,15 @@ async fn main() -> Result<()> {
             let url = format!("http://localhost:{}/presenter", port);
             let _ = open::that(&url);
             server::serve(file, port, false).await?;
+        }
+        Command::Init { file } => {
+            if file.exists() {
+                anyhow::bail!("{} already exists — refusing to overwrite", file.display());
+            }
+            std::fs::write(&file, help::INIT_TEMPLATE)?;
+            tracing::info!("Created {}", file.display());
+            println!("Created {}", file.display());
+            println!("Run `slides serve {}` to preview.", file.display());
         }
     }
 
