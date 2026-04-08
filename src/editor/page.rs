@@ -17,11 +17,11 @@ pub fn editor_html() -> String {
         <span class="mode-badge">EDITOR</span>
       </div>
       <div class="topbar-center" id="deck-settings">
-        <label>Title <input type="text" id="cfg-title" placeholder="Untitled"></label>
-        <label>Theme <select id="cfg-theme"><option value="minimal">Minimal</option><option value="dark">Dark</option></select></label>
-        <label>Aspect <select id="cfg-aspect"><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label>
-        <label>Transition <select id="cfg-transition"><option value="slide">Slide</option><option value="fade">Fade</option><option value="none">None</option></select></label>
-        <label>Color <select id="cfg-color"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label>Title <input type="text" id="cfg-title" placeholder="Untitled" oninput="scheduleSave()"></label>
+        <label>Theme <select id="cfg-theme" onchange="scheduleSave()"><option value="minimal">Minimal</option><option value="dark">Dark</option></select></label>
+        <label>Aspect <select id="cfg-aspect" onchange="scheduleSave()"><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label>
+        <label>Transition <select id="cfg-transition" onchange="scheduleSave()"><option value="slide">Slide</option><option value="fade">Fade</option><option value="none">None</option></select></label>
+        <label>Color <select id="cfg-color" onchange="scheduleSave()"><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <label>Title Size <select id="cfg-title-size" onchange="scheduleSave()">
           <option value="50px">Small</option>
           <option value="67px">Medium</option>
@@ -409,7 +409,7 @@ const EDITOR_JS: &str = r##"
     var now = Date.now();
     if (now - lastPreviewRefresh < REFRESH_COOLDOWN) return;
     lastPreviewRefresh = now;
-    previewFrame.src = '/#/' + selectedSlide;
+    previewFrame.src = '/?_t=' + Date.now() + '#/' + selectedSlide;
   }
 
   // --- Overflow detection ---
