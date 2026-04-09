@@ -4,6 +4,16 @@
 
 `slides` is a single Rust binary that turns a `.md` file into a browser-based presentation with live reload, speaker notes, multi-column layouts, and PDF export.
 
+<p align="center">
+  <img alt="Editor view" src="https://github.com/user-attachments/assets/5c08a389-425e-4f1e-b80a-fa7c08b89ce2" width="100%" />
+  <em>Editor view</em>
+</p>
+
+<p align="center">
+  <img alt="Presentation view" src="https://github.com/user-attachments/assets/4c12fc7e-6dfd-4ff9-a0b5-72dde3b7d152" width="100%" />
+  <em>Presentation view</em>
+</p>
+
 ## Quick start
 
 ```bash
