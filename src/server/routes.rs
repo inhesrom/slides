@@ -6,6 +6,7 @@ use axum::{
     Router,
     extract::State,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    http::header,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
 };
@@ -53,6 +54,7 @@ pub fn create_router(
     let mut router = Router::new()
         .route("/", get(index))
         .route("/help", get(help_view))
+        .route("/syntax.md", get(syntax_md_view))
         .route("/presenter", get(presenter_view))
         .route("/ws", get(ws_handler));
 
@@ -73,6 +75,13 @@ async fn index(State(state): State<AppState>) -> impl IntoResponse {
 
 async fn help_view() -> impl IntoResponse {
     Html(help::help_html())
+}
+
+async fn syntax_md_view() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/markdown; charset=utf-8")],
+        help::SYNTAX_MD,
+    )
 }
 
 async fn presenter_view(State(state): State<AppState>) -> impl IntoResponse {

@@ -46,53 +46,11 @@ slides export presentation.md -f pdf -o deck.pdf  # requires --features pdf
 - **Visual editor** — `slides edit` opens a browser-based editor with toolbar, layout selector, and live preview; the `.md` file updates in real time
 - **Syntax reference** — visit `/help` in the browser while presenting, or run `slides init` for a commented template
 
-## Syntax at a glance
+## Syntax and usage
 
-```markdown
----
-title: My Talk
-theme: minimal
-aspect: "16:9"
----
-
-# First Slide
-
-Regular markdown: **bold**, *italic*, `code`, tables, lists, footnotes.
-
---- {class: centered}
-
-# Section Title
-
-Centered slides are great for title pages and dividers.
-
-^[Inline speaker note — only visible in presenter mode.]
-
---- {transition: fade}
-
-:::split 60/40
-
-## Left Column
-
-Code, text, images — whatever you need.
-
-+++
-
-## Right Column
-
-Supporting content goes here.
-
-:::
-
----
-
-## Reveals
-
-+ First point
-+ Second point
-+ Third point
-```
-
-Full syntax reference: run `slides serve` and visit `http://localhost:3030/help`.
+- **[SYNTAX.md](SYNTAX.md)** — complete reference for the authoring syntax (frontmatter, layouts, speaker notes, fragments, semantic annotations).
+- **[USAGE.md](USAGE.md)** — keyboard shortcuts and CLI commands.
+- Running `slides serve` or `slides present`? Visit `http://localhost:3030/help` for the same content rendered in-browser, or `http://localhost:3030/syntax.md` for the raw markdown.
 
 ## Install
 
@@ -109,17 +67,6 @@ cargo install --path .
 # With PDF export support
 cargo install --path . --features pdf
 ```
-
-## Keyboard shortcuts
-
-| Key | Action |
-|---|---|
-| `->` `Space` `PgDn` | Next slide/fragment |
-| `<-` `PgUp` | Previous |
-| `Home` / `End` | First / last slide |
-| `F` | Fullscreen |
-| `D` | Toggle dark mode |
-| `P` | Open presenter view |
 
 ## License
 

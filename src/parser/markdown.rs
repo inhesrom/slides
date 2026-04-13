@@ -3,6 +3,25 @@ use pulldown_cmark::{html, Options, Parser};
 /// Marker inserted for `+` list items so we can find them in the HTML output.
 const FRAGMENT_MARKER: &str = "\u{FEFF}";
 
+/// Render markdown to HTML without any slide-specific transformations.
+///
+/// Enables the same pulldown-cmark extensions as the slide renderer (tables,
+/// footnotes, strikethrough, task lists) but does NOT convert `+` list items
+/// into fragment reveals or strip `{.class}` trailing annotations. Use this
+/// for rendering prose documents like SYNTAX.md where those transformations
+/// would mis-render example snippets.
+pub fn render_plain(markdown: &str) -> String {
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS;
+
+    let parser = Parser::new_ext(markdown, options);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+    html_output
+}
+
 /// Render markdown to HTML, applying semantic style annotations.
 pub fn render(markdown: &str) -> String {
     let (cleaned, annotations) = extract_annotations(markdown);
@@ -292,6 +311,40 @@ mod tests {
     fn test_no_trailing_annotation() {
         let result = parse_trailing_annotation("Just normal text");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_render_plain_basic_headings() {
+        let result = render_plain("# Hello\n\nWorld");
+        assert!(result.contains("<h1>Hello</h1>"));
+        assert!(result.contains("<p>World</p>"));
+    }
+
+    #[test]
+    fn test_render_plain_does_not_make_fragments() {
+        // `+` list items must remain normal list items in plain render,
+        // not be converted into fragment-classed <li>s.
+        let result = render_plain("+ item one\n+ item two");
+        assert!(!result.contains("fragment"), "Got: {}", result);
+        assert!(result.contains("<li>item one</li>"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_render_plain_does_not_strip_annotations() {
+        // `{.class}` trailing annotations are slide-specific; plain render
+        // leaves them as literal text.
+        let result = render_plain("Some text {.aside}");
+        assert!(result.contains("{.aside}"), "Got: {}", result);
+        assert!(!result.contains("class=\"aside\""), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_render_plain_tables_and_code() {
+        let table = render_plain("| A | B |\n|---|---|\n| 1 | 2 |");
+        assert!(table.contains("<table>"), "Got: {}", table);
+
+        let code = render_plain("```rust\nfn main() {}\n```");
+        assert!(code.contains("<code class=\"language-rust\">"), "Got: {}", code);
     }
 
     #[test]
