@@ -388,7 +388,7 @@ mod tests {
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
                 title_size: "67px".to_string(),
-                body_size: "28px".to_string(),
+                body_size: "32px".to_string(),
             },
             slides: vec![
                 EditorSlide {
@@ -422,7 +422,7 @@ mod tests {
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
                 title_size: "67px".to_string(),
-                body_size: "28px".to_string(),
+                body_size: "32px".to_string(),
             },
             slides: vec![EditorSlide {
                 content: "# Title".to_string(),
@@ -449,7 +449,7 @@ mod tests {
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
                 title_size: "67px".to_string(),
-                body_size: "28px".to_string(),
+                body_size: "32px".to_string(),
             },
             slides: vec![EditorSlide {
                 layout: Some(EditorLayout {
@@ -483,7 +483,7 @@ mod tests {
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
                 title_size: "67px".to_string(),
-                body_size: "28px".to_string(),
+                body_size: "32px".to_string(),
             },
             slides: vec![
                 EditorSlide {
@@ -518,7 +518,7 @@ mod tests {
                 auto_fit: "warn".to_string(),
                 export_images: "relative".to_string(),
                 title_size: "67px".to_string(),
-                body_size: "28px".to_string(),
+                body_size: "32px".to_string(),
             },
             slides: vec![
                 EditorSlide {

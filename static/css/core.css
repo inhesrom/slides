@@ -44,7 +44,7 @@ html, body {
   transition: opacity 0.4s ease, transform 0.4s ease;
   transform: translateX(100%);
   overflow: hidden;
-  font-size: var(--body-size, 28px);
+  font-size: var(--body-size, 32px);
 }
 
 .slide.active {

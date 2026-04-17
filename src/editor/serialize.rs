@@ -30,7 +30,7 @@ pub fn serialize_deck(deck: &EditorDeck) -> String {
     if deck.config.title_size != "67px" {
         out.push_str(&format!("title_size: \"{}\"\n", deck.config.title_size));
     }
-    if deck.config.body_size != "28px" {
+    if deck.config.body_size != "32px" {
         out.push_str(&format!("body_size: \"{}\"\n", deck.config.body_size));
     }
     out.push_str("---\n");

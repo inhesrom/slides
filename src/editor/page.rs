@@ -22,19 +22,8 @@ pub fn editor_html() -> String {
         <label>Aspect <select id="cfg-aspect" onchange="scheduleSave()"><option value="16:9">16:9</option><option value="4:3">4:3</option></select></label>
         <label>Transition <select id="cfg-transition" onchange="scheduleSave()"><option value="slide">Slide</option><option value="fade">Fade</option><option value="none">None</option></select></label>
         <label>Color <select id="cfg-color" onchange="scheduleSave()"><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label>Title Size <select id="cfg-title-size" onchange="scheduleSave()">
-          <option value="50px">Small</option>
-          <option value="67px">Medium</option>
-          <option value="90px">Large</option>
-          <option value="112px">X-Large</option>
-        </select></label>
-        <label>Body Size <select id="cfg-body-size" onchange="scheduleSave()">
-          <option value="20px">Small</option>
-          <option value="24px">Medium</option>
-          <option value="28px">Default</option>
-          <option value="32px">Large</option>
-          <option value="36px">X-Large</option>
-        </select></label>
+        <label>Title Size <input type="number" id="cfg-title-size" class="size-input" min="20" max="200" step="1" oninput="scheduleSave()"> px</label>
+        <label>Body Size <input type="number" id="cfg-body-size" class="size-input" min="10" max="120" step="1" oninput="scheduleSave()"> px</label>
       </div>
       <div class="topbar-right">
         <span class="status" id="save-status">Connected</span>
@@ -143,6 +132,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .topbar-center label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #94a3b8; }
 .topbar-center input, .topbar-center select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
 .topbar-center input[type="text"] { width: 140px; }
+.topbar-center input.size-input { width: 4em; }
 .topbar-right { display: flex; align-items: center; }
 .status { font-size: 0.75rem; color: #22c55e; }
 .status.error { color: #ef4444; }
@@ -401,8 +391,8 @@ const EDITOR_JS: &str = r##"
     document.getElementById('cfg-aspect').value = deck.config.aspect;
     document.getElementById('cfg-transition').value = deck.config.transition;
     document.getElementById('cfg-color').value = deck.config.color_scheme;
-    document.getElementById('cfg-title-size').value = deck.config.title_size || '67px';
-    document.getElementById('cfg-body-size').value = deck.config.body_size || '28px';
+    document.getElementById('cfg-title-size').value = parseInt(deck.config.title_size, 10) || 67;
+    document.getElementById('cfg-body-size').value = parseInt(deck.config.body_size, 10) || 32;
   }
 
   function refreshPreview() {
@@ -466,8 +456,8 @@ const EDITOR_JS: &str = r##"
     deck.config.aspect = document.getElementById('cfg-aspect').value;
     deck.config.transition = document.getElementById('cfg-transition').value;
     deck.config.color_scheme = document.getElementById('cfg-color').value;
-    deck.config.title_size = document.getElementById('cfg-title-size').value;
-    deck.config.body_size = document.getElementById('cfg-body-size').value;
+    deck.config.title_size = document.getElementById('cfg-title-size').value + 'px';
+    deck.config.body_size = document.getElementById('cfg-body-size').value + 'px';
   }
 
   // --- Persistence ---

@@ -22,7 +22,7 @@ highlight_theme: github
 auto_fit: warn
 export_images: relative
 title_size: 67px
-body_size: 28px
+body_size: 32px
 ---
 ```
 
@@ -37,7 +37,11 @@ body_size: 28px
 | `auto_fit` | `warn` \| `shrink` | `warn` | Behavior when slide content overflows |
 | `export_images` | `relative` \| `inline` | `relative` | How images are embedded during export |
 | `title_size` | CSS length | `67px` | Base size for slide titles |
-| `body_size` | CSS length | `28px` | Base size for body text |
+| `body_size` | CSS length | `32px` | Base size for body text |
+
+Any CSS length is accepted in frontmatter (`px`, `rem`, `em`, etc.), but the
+editor UI only works with `px` values and will rewrite other units to `px`
+when you save changes from the editor.
 
 ---
 
