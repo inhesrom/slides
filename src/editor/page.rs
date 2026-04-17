@@ -99,6 +99,7 @@ pub fn editor_html() -> String {
         <div class="resize-handle" id="resize-handle"></div>
         <div class="preview-header">
           <span>Live Preview</span>
+          <label class="checkbox-label" title="Force all fragments visible in preview"><input type="checkbox" id="preview-reveal-all" checked onchange="onPreviewRevealChange()"> Reveal all</label>
           <button class="btn-sm" onclick="togglePreview()" id="preview-toggle" title="Hide preview">&#9654;</button>
         </div>
         <div class="preview-container" id="preview-container">
@@ -197,7 +198,9 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .preview-restore { display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: #334155; border: 1px solid #475569; color: #e2e8f0; width: 24px; height: 48px; border-radius: 4px 0 0 4px; cursor: pointer; font-size: 0.75rem; z-index: 5; }
 .preview-restore:hover { background: #475569; }
 .preview-panel.collapsed ~ .preview-restore { display: block; }
-.preview-header { padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 600; color: #94a3b8; background: #1e293b; border-bottom: 1px solid #334155; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center; }
+.preview-header { padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 600; color: #94a3b8; background: #1e293b; border-bottom: 1px solid #334155; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.75rem; }
+.preview-header > #preview-toggle { margin-left: auto; }
+.preview-header .checkbox-label { text-transform: none; letter-spacing: normal; font-weight: 400; }
 .preview-controls { display: flex; gap: 0.25rem; }
 
 /* Scaled preview: render at full presentation size, scale down to fit */
@@ -426,8 +429,34 @@ const EDITOR_JS: &str = r##"
   }
 
   previewFrame.addEventListener('load', function() {
-    setTimeout(checkOverflow, 200);
+    setTimeout(function() {
+      applyFragmentReveal();
+      checkOverflow();
+    }, 200);
   });
+
+  // --- Reveal-all-fragments toggle ---
+  var revealAllCheckbox = document.getElementById('preview-reveal-all');
+  var storedReveal = localStorage.getItem('previewRevealAll');
+  revealAllCheckbox.checked = (storedReveal === null) ? true : (storedReveal === 'true');
+
+  function applyFragmentReveal() {
+    try {
+      var doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+      if (!doc) return;
+      var frags = doc.querySelectorAll('.fragment');
+      var reveal = revealAllCheckbox.checked;
+      for (var i = 0; i < frags.length; i++) {
+        if (reveal) frags[i].classList.add('visible');
+        else frags[i].classList.remove('visible');
+      }
+    } catch(e) { /* cross-origin or not ready */ }
+  }
+
+  window.onPreviewRevealChange = function() {
+    localStorage.setItem('previewRevealAll', revealAllCheckbox.checked ? 'true' : 'false');
+    applyFragmentReveal();
+  };
 
   // --- Sync state from DOM ---
   function syncFromDOM() {
