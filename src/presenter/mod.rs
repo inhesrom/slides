@@ -10,6 +10,11 @@ pub fn presenter_html(deck_title: &str) -> String {
   <style>{css}</style>
 </head>
 <body>
+  <button class="drawer-toggle" id="drawer-toggle" aria-label="Toggle slide selector" aria-expanded="false">›</button>
+  <aside class="slide-drawer" id="slide-drawer" aria-hidden="true">
+    <div class="drawer-header">Slides</div>
+    <div class="thumbnail-grid" id="thumbnail-grid"></div>
+  </aside>
   <div class="presenter">
     <div class="main-panel">
       <div class="slide-container" id="current-container">
@@ -72,6 +77,33 @@ body { background: #1a1a2e; color: #e2e8f0; font-family: system-ui, sans-serif; 
 .timer-controls { display: flex; gap: 0.5rem; }
 .timer-controls button { background: #334155; color: #e2e8f0; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
 .timer-controls button:hover { background: #475569; }
+
+/* Slide selector drawer */
+.slide-drawer {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 280px;
+  background: #0f172a; border-right: 2px solid #334155;
+  transform: translateX(-100%); transition: transform 0.2s ease;
+  display: flex; flex-direction: column;
+  z-index: 10;
+}
+.slide-drawer.open { transform: translateX(0); }
+.drawer-header { padding: 0.75rem 1rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; border-bottom: 1px solid #334155; }
+.thumbnail-grid { flex: 1; overflow-y: auto; padding: 0.75rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; align-content: start; }
+.thumbnail { position: relative; overflow: hidden; border: 2px solid #334155; border-radius: 4px; width: 100%; aspect-ratio: 16/9; cursor: pointer; background: #000; }
+.thumbnail:hover { border-color: #475569; }
+.thumbnail.active { border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.3); }
+.thumbnail .thumb-num { position: absolute; top: 2px; left: 4px; font-size: 0.7rem; color: #94a3b8; background: rgba(15,23,42,0.75); padding: 0 4px; border-radius: 2px; z-index: 2; pointer-events: none; }
+.thumbnail iframe { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: none; transform-origin: top left; pointer-events: none; }
+
+.drawer-toggle {
+  position: fixed; top: 50%; left: 0; transform: translateY(-50%);
+  background: #334155; color: #e2e8f0; border: none;
+  width: 22px; height: 56px; border-radius: 0 6px 6px 0;
+  cursor: pointer; font-size: 1.2rem; line-height: 56px; padding: 0;
+  z-index: 11; transition: left 0.2s ease, background 0.15s ease;
+}
+.drawer-toggle:hover { background: #475569; }
+.drawer-toggle.open { left: 280px; }
 "#;
 
 const PRESENTER_JS: &str = r#"
@@ -92,6 +124,11 @@ const PRESENTER_JS: &str = r#"
   var timerEl = document.getElementById('timer');
   var progressEl = document.getElementById('progress');
   var timerBtn = document.getElementById('timer-btn');
+  var drawerEl = document.getElementById('slide-drawer');
+  var drawerToggle = document.getElementById('drawer-toggle');
+  var thumbGrid = document.getElementById('thumbnail-grid');
+  var thumbnailCells = []; // [{wrap, frame, loaded}, ...]
+  var thumbnailsBuilt = false;
 
   var SLIDE_W = 1920;
   var SLIDE_H = 1080;
@@ -124,6 +161,7 @@ const PRESENTER_JS: &str = r#"
     try { data = JSON.parse(event.data); } catch(e) { return; }
     if (data.type === 'reload') {
       currentFrame.src = '/';
+      invalidateThumbnails();
     } else if (data.type === 'sync' && data.origin !== presenterSyncId) {
       // Incoming sync from audience view — follow their navigation
       currentSlide = data.slide;
@@ -149,6 +187,9 @@ const PRESENTER_JS: &str = r#"
     extractSlideData();
     scaleFrames();
     if (nextLoaded) updatePresenterView();
+    if (drawerEl.classList.contains('open') && !thumbnailsBuilt && totalSlides > 0) {
+      buildThumbnails();
+    }
   });
 
   nextFrame.addEventListener('load', function() {
@@ -199,6 +240,8 @@ const PRESENTER_JS: &str = r#"
       fragInfo = ' (fragment ' + currentFragments + '/' + sd.fragmentCount + ')';
     }
     progressEl.textContent = 'Slide ' + (currentSlide + 1) + ' / ' + totalSlides + fragInfo;
+
+    updateActiveThumbnail();
   }
 
   function updateNextPreview() {
@@ -277,6 +320,90 @@ const PRESENTER_JS: &str = r#"
       fragments: currentFragments,
       origin: presenterSyncId
     }));
+  }
+
+  // Slide selector drawer
+  drawerToggle.addEventListener('click', function() {
+    var isOpen = drawerEl.classList.toggle('open');
+    drawerToggle.classList.toggle('open', isOpen);
+    drawerToggle.textContent = isOpen ? '‹' : '›';
+    drawerToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    drawerEl.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    if (isOpen && !thumbnailsBuilt && totalSlides > 0) buildThumbnails();
+  });
+
+  function buildThumbnails() {
+    thumbGrid.innerHTML = '';
+    thumbnailCells = [];
+    for (var i = 0; i < totalSlides; i++) {
+      (function(idx) {
+        var wrap = document.createElement('div');
+        wrap.className = 'thumbnail';
+        var num = document.createElement('span');
+        num.className = 'thumb-num';
+        num.textContent = String(idx + 1);
+        var frame = document.createElement('iframe');
+        frame.setAttribute('tabindex', '-1');
+        frame.setAttribute('aria-hidden', 'true');
+        wrap.appendChild(num);
+        wrap.appendChild(frame);
+        thumbGrid.appendChild(wrap);
+
+        var cell = { wrap: wrap, frame: frame, loaded: false };
+        thumbnailCells.push(cell);
+
+        frame.addEventListener('load', function() {
+          cell.loaded = true;
+          try {
+            var sd = slidesData[idx];
+            var fragCount = sd ? sd.fragmentCount : 0;
+            frame.contentWindow.postMessage({
+              type: 'goto', slide: idx, fragments: fragCount
+            }, '*');
+          } catch(e) {}
+          scaleThumbnail(cell);
+        });
+
+        new ResizeObserver(function() { scaleThumbnail(cell); }).observe(wrap);
+
+        wrap.addEventListener('click', function() {
+          currentSlide = idx;
+          currentFragments = 0;
+          updatePresenterView();
+          broadcastSync();
+        });
+
+        frame.src = '/';
+      })(i);
+    }
+    thumbnailsBuilt = true;
+    updateActiveThumbnail();
+  }
+
+  function scaleThumbnail(cell) {
+    var cw = cell.wrap.clientWidth;
+    var ch = cell.wrap.clientHeight;
+    if (cw === 0 || ch === 0) return;
+    var scale = Math.min(cw / SLIDE_W, ch / SLIDE_H);
+    cell.frame.style.transform = 'scale(' + scale + ')';
+  }
+
+  function updateActiveThumbnail() {
+    for (var i = 0; i < thumbnailCells.length; i++) {
+      thumbnailCells[i].wrap.classList.toggle('active', i === currentSlide);
+    }
+  }
+
+  function invalidateThumbnails() {
+    thumbnailsBuilt = false;
+    thumbnailCells = [];
+    thumbGrid.innerHTML = '';
+    if (drawerEl.classList.contains('open') && totalSlides > 0) {
+      // Drawer is open — rebuild after the main iframe reloads and re-extracts data
+      setTimeout(function() {
+        if (!thumbnailsBuilt && totalSlides > 0) buildThumbnails();
+      }, 400);
+    }
   }
 
   // Timer
