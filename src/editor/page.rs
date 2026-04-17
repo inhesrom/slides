@@ -711,26 +711,34 @@ const EDITOR_JS: &str = r##"
     return contentEl;
   }
 
+  // Programmatic textarea edit that preserves the browser's native undo stack.
+  // Assigning to `.value` directly wipes undo history, so we route through
+  // execCommand('insertText') which enrolls the change as a user edit.
+  function replaceRange(ta, start, end, text) {
+    ta.focus();
+    ta.setSelectionRange(start, end);
+    var ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (e) {}
+    if (!ok) {
+      ta.value = ta.value.substring(0, start) + text + ta.value.substring(end);
+      ta.setSelectionRange(start + text.length, start + text.length);
+    }
+  }
+
   function wrapSelection(before, after) {
     var ta = getActiveTextarea();
     var start = ta.selectionStart;
     var end = ta.selectionEnd;
-    var text = ta.value;
-    var selected = text.substring(start, end) || 'text';
-    ta.value = text.substring(0, start) + before + selected + after + text.substring(end);
-    ta.selectionStart = start + before.length;
-    ta.selectionEnd = start + before.length + selected.length;
-    ta.focus();
+    var selected = ta.value.substring(start, end) || 'text';
+    replaceRange(ta, start, end, before + selected + after);
+    ta.setSelectionRange(start + before.length, start + before.length + selected.length);
     scheduleSave();
   }
 
   function insertAtCursor(text) {
     var ta = getActiveTextarea();
     var start = ta.selectionStart;
-    var val = ta.value;
-    ta.value = val.substring(0, start) + text + val.substring(start);
-    ta.selectionStart = ta.selectionEnd = start + text.length;
-    ta.focus();
+    replaceRange(ta, start, ta.selectionEnd, text);
     scheduleSave();
   }
 
@@ -745,9 +753,7 @@ const EDITOR_JS: &str = r##"
     var line = val.substring(lineStart, lineEnd);
     // Remove existing list/heading prefix
     var cleaned = line.replace(/^(\s*)(#{1,6}\s+|[-+*]\s+|\d+\.\s+|>\s+)/, '$1');
-    ta.value = val.substring(0, lineStart) + prefix + cleaned + val.substring(lineEnd);
-    ta.selectionStart = ta.selectionEnd = lineStart + prefix.length + cleaned.length;
-    ta.focus();
+    replaceRange(ta, lineStart, lineEnd, prefix + cleaned);
     scheduleSave();
   }
 
@@ -848,15 +854,69 @@ const EDITOR_JS: &str = r##"
     }
   });
 
-  // Tab inserts spaces in textareas
+  // Tab / Shift+Tab: indent and outdent in textareas. Handles block
+  // indent/outdent when the selection spans multiple lines (or any non-empty
+  // selection), and strips up to 2 leading spaces (or 1 tab) on Shift+Tab.
+  function indentBlock(ta, shift) {
+    var val = ta.value;
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+
+    if (start === end) {
+      if (!shift) {
+        replaceRange(ta, start, start, '  ');
+        scheduleSave();
+        return;
+      }
+      var lineStart = val.lastIndexOf('\n', start - 1) + 1;
+      var strip = 0;
+      if (val.substr(lineStart, 2) === '  ') strip = 2;
+      else if (val.charAt(lineStart) === ' ' || val.charAt(lineStart) === '\t') strip = 1;
+      if (strip === 0) return;
+      replaceRange(ta, lineStart, lineStart + strip, '');
+      var newPos = Math.max(lineStart, start - strip);
+      ta.setSelectionRange(newPos, newPos);
+      scheduleSave();
+      return;
+    }
+
+    // Non-empty selection: operate on whole lines touched by the range.
+    var blockStart = val.lastIndexOf('\n', start - 1) + 1;
+    // If selection ends exactly at a line break, don't reach into the next line.
+    var effectiveEnd = (end > start && val.charAt(end - 1) === '\n') ? end - 1 : end;
+    var blockEnd = val.indexOf('\n', effectiveEnd);
+    if (blockEnd === -1) blockEnd = val.length;
+    var lines = val.substring(blockStart, blockEnd).split('\n');
+    var newLines = [];
+
+    if (!shift) {
+      for (var i = 0; i < lines.length; i++) newLines.push('  ' + lines[i]);
+      replaceRange(ta, blockStart, blockEnd, newLines.join('\n'));
+      ta.setSelectionRange(start + 2, end + 2 * lines.length);
+    } else {
+      var firstStripped = 0;
+      var totalStripped = 0;
+      for (var i = 0; i < lines.length; i++) {
+        var s = 0;
+        if (lines[i].substr(0, 2) === '  ') s = 2;
+        else if (lines[i].charAt(0) === ' ' || lines[i].charAt(0) === '\t') s = 1;
+        if (i === 0) firstStripped = s;
+        totalStripped += s;
+        newLines.push(lines[i].substring(s));
+      }
+      if (totalStripped === 0) return;
+      replaceRange(ta, blockStart, blockEnd, newLines.join('\n'));
+      var newStart = Math.max(blockStart, start - firstStripped);
+      var newEnd = Math.max(newStart, end - totalStripped);
+      ta.setSelectionRange(newStart, newEnd);
+    }
+    scheduleSave();
+  }
+
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Tab' && e.target.tagName === 'TEXTAREA') {
       e.preventDefault();
-      var ta = e.target;
-      var start = ta.selectionStart;
-      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(ta.selectionEnd);
-      ta.selectionStart = ta.selectionEnd = start + 2;
-      scheduleSave();
+      indentBlock(e.target, e.shiftKey);
     }
   });
 
