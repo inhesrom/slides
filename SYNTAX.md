@@ -69,6 +69,7 @@ Attach per-slide attributes in curly braces after the separator:
 --- {transition: fade}
 --- {class: centered}
 --- {timing: 45s}
+--- {title_size: 96px, body_size: 20px}
 --- {transition: fade, class: centered, timing: 30s}
 ```
 
@@ -77,6 +78,13 @@ Attach per-slide attributes in curly braces after the separator:
 | `transition` | `slide` \| `fade` | Override the deck default for this slide |
 | `class` | CSS class name (e.g. `centered`) | Apply a CSS class to the slide wrapper |
 | `timing` | duration (e.g. `45s`) | Target speaking time, surfaced in presenter mode |
+| `title_size` | CSS length (e.g. `96px`) | Override the deck `title_size` for this slide only |
+| `body_size` | CSS length (e.g. `20px`) | Override the deck `body_size` for this slide only |
+
+Size overrides accept any CSS length in hand-authored markdown, but — just like
+the deck-level `title_size` / `body_size` — the editor UI only works with `px`
+values and will rewrite other units on save. Omitting either key falls back to
+the deck default.
 
 ### Centered Slides
 

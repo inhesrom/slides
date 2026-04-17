@@ -15,6 +15,21 @@
     slides[current].classList.add('enter-' + direction);
     updateProgress();
     updateHash();
+    notifyParent();
+  }
+
+  function notifyParent() {
+    if (window.parent === window) return;
+    var frags = getFragments();
+    var visibleCount = 0;
+    for (var i = 0; i < frags.length; i++) {
+      if (frags[i].classList.contains('visible')) visibleCount++;
+    }
+    window.parent.postMessage({
+      type: 'preview-slide-change',
+      slide: current,
+      fragments: visibleCount
+    }, '*');
   }
 
   function getFragments() {
@@ -226,7 +241,8 @@
 
   // Listen for postMessage from presenter view
   window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'goto' && typeof e.data.slide === 'number') {
+    if (!e.data) return;
+    if (e.data.type === 'goto' && typeof e.data.slide === 'number') {
       showSlide(e.data.slide);
       // Optionally reveal a specific number of fragments
       if (typeof e.data.fragments === 'number') {
@@ -239,6 +255,31 @@
           }
         }
       }
+    } else if (e.data.type === 'update-slide'
+               && typeof e.data.index === 'number'
+               && typeof e.data.html === 'string') {
+      // In-place replace of a single slide's <section>, sent by the editor
+      // on every keystroke. Preserve the .active marker and any revealed
+      // fragments so mid-edit updates don't flash the slide back to hidden.
+      var idx = e.data.index;
+      var oldEl = slides[idx];
+      if (!oldEl) return;
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = e.data.html;
+      var newEl = wrapper.firstElementChild;
+      if (!newEl) return;
+      if (oldEl.classList.contains('active')) newEl.classList.add('active');
+      var oldFrags = oldEl.querySelectorAll('.fragment');
+      var visibleCount = 0;
+      for (var i = 0; i < oldFrags.length; i++) {
+        if (oldFrags[i].classList.contains('visible')) visibleCount++;
+      }
+      var newFrags = newEl.querySelectorAll('.fragment');
+      for (var j = 0; j < newFrags.length && j < visibleCount; j++) {
+        newFrags[j].classList.add('visible');
+      }
+      oldEl.parentNode.replaceChild(newEl, oldEl);
+      slides = document.querySelectorAll('.slide');
     }
   });
 

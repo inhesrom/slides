@@ -41,7 +41,7 @@ pub fn serialize_deck(deck: &EditorDeck) -> String {
             out.push('\n');
             out.push_str(&serialize_separator(slide));
             out.push('\n');
-        } else if slide.transition.is_some() || slide.class.is_some() {
+        } else if has_separator_attrs(slide) {
             // First slide with attrs needs a separator too
             out.push('\n');
             out.push_str(&serialize_separator(slide));
@@ -55,6 +55,15 @@ pub fn serialize_deck(deck: &EditorDeck) -> String {
     out
 }
 
+/// Whether the slide carries any separator-line attribute that must be
+/// serialized (i.e. the slide needs a `--- {…}` line of its own).
+fn has_separator_attrs(slide: &EditorSlide) -> bool {
+    slide.transition.is_some()
+        || slide.class.is_some()
+        || slide.title_size.is_some()
+        || slide.body_size.is_some()
+}
+
 /// Serialize a slide separator line with optional attributes.
 fn serialize_separator(slide: &EditorSlide) -> String {
     let mut attrs = Vec::new();
@@ -63,6 +72,12 @@ fn serialize_separator(slide: &EditorSlide) -> String {
     }
     if let Some(c) = &slide.class {
         attrs.push(format!("class: {}", c));
+    }
+    if let Some(v) = &slide.title_size {
+        attrs.push(format!("title_size: {}", v));
+    }
+    if let Some(v) = &slide.body_size {
+        attrs.push(format!("body_size: {}", v));
     }
 
     if attrs.is_empty() {
@@ -272,6 +287,90 @@ mod tests {
         };
         let md = serialize_deck(&deck);
         assert!(md.contains("--- {transition: fade, class: centered}"));
+    }
+
+    #[test]
+    fn test_serialize_slide_with_title_size() {
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![
+                EditorSlide::default(),
+                EditorSlide {
+                    content: "# Big".to_string(),
+                    title_size: Some("96px".to_string()),
+                    ..EditorSlide::default()
+                },
+            ],
+        };
+        let md = serialize_deck(&deck);
+        assert!(md.contains("--- {title_size: 96px}"), "got: {md}");
+    }
+
+    #[test]
+    fn test_serialize_slide_with_both_sizes() {
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![
+                EditorSlide::default(),
+                EditorSlide {
+                    content: "# Mixed".to_string(),
+                    title_size: Some("40px".to_string()),
+                    body_size: Some("20px".to_string()),
+                    ..EditorSlide::default()
+                },
+            ],
+        };
+        let md = serialize_deck(&deck);
+        assert!(
+            md.contains("--- {title_size: 40px, body_size: 20px}"),
+            "got: {md}"
+        );
+    }
+
+    #[test]
+    fn test_serialize_first_slide_with_size_only_writes_separator() {
+        // Regression: the "needs a separator" predicate must include size
+        // overrides. Without this, a first slide whose only attribute is a
+        // size override would silently drop the override on write.
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![EditorSlide {
+                content: "# Big".to_string(),
+                title_size: Some("96px".to_string()),
+                ..EditorSlide::default()
+            }],
+        };
+        let md = serialize_deck(&deck);
+        assert!(
+            md.contains("--- {title_size: 96px}"),
+            "first slide's size override must be serialized: {md}"
+        );
+    }
+
+    #[test]
+    fn test_round_trip_sizes() {
+        // Ensure serialize → parse → serialize preserves per-slide sizes.
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![
+                EditorSlide {
+                    content: "# First".to_string(),
+                    ..EditorSlide::default()
+                },
+                EditorSlide {
+                    content: "# Second".to_string(),
+                    title_size: Some("96px".to_string()),
+                    body_size: Some("20px".to_string()),
+                    ..EditorSlide::default()
+                },
+            ],
+        };
+        let md = serialize_deck(&deck);
+        let reparsed = crate::editor::deck_to_editor(&md).unwrap();
+        assert!(reparsed.slides[0].title_size.is_none());
+        assert!(reparsed.slides[0].body_size.is_none());
+        assert_eq!(reparsed.slides[1].title_size.as_deref(), Some("96px"));
+        assert_eq!(reparsed.slides[1].body_size.as_deref(), Some("20px"));
     }
 
     #[test]

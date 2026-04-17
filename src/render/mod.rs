@@ -13,6 +13,61 @@ pub struct RenderedDeck {
     pub overflows: Vec<OverflowResult>,
 }
 
+/// Render a single slide's `<section>…</section>` markup.
+///
+/// Used by the editor's live-preview path to patch just the active slide in
+/// place inside the preview iframe, without reloading the whole document.
+/// The markup produced here must stay structurally identical to the per-slide
+/// block in `templates/deck.html.j2` so in-place replacement is seamless.
+pub fn render_slide_html(deck: &Deck, index: usize) -> Result<String> {
+    let slide = deck
+        .slides
+        .get(index)
+        .ok_or_else(|| anyhow::anyhow!("Slide index {} out of range", index))?;
+
+    let transition = slide
+        .attrs
+        .transition
+        .as_deref()
+        .unwrap_or(&deck.config.transition);
+    let classes = slide.attrs.class.as_deref().unwrap_or("");
+    let notes: Vec<String> = slide.speaker_notes.iter().map(|n| n.text.clone()).collect();
+    let style = slide_style(slide);
+
+    let template_str = r#"<section class="slide {{ classes }}" data-index="{{ index }}" data-transition="{{ transition }}"{% if style %} style="{{ style }}"{% endif %}{% if notes %} data-notes="{{ notes | join('\n') }}"{% endif %}>
+{{ html | safe }}
+</section>"#;
+
+    let mut env = Environment::new();
+    env.add_template("slide.html.j2", template_str)?;
+    let tmpl = env.get_template("slide.html.j2")?;
+    let html = tmpl.render(context! {
+        index => index,
+        html => slide.html.as_str(),
+        transition => transition,
+        classes => classes,
+        notes => notes,
+        style => style,
+    })?;
+
+    Ok(html)
+}
+
+/// Build an inline `style="…"` value from per-slide size overrides, or empty
+/// if no overrides are set. Emitting as CSS custom properties on the section
+/// lets the default `:root` values inherit normally while per-slide values
+/// take precedence via the cascade.
+fn slide_style(slide: &crate::parser::Slide) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(v) = slide.attrs.title_size.as_deref() {
+        parts.push(format!("--title-size: {}", v));
+    }
+    if let Some(v) = slide.attrs.body_size.as_deref() {
+        parts.push(format!("--body-size: {}", v));
+    }
+    parts.join("; ")
+}
+
 /// Render a parsed Deck into a complete HTML document.
 pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
     let core_css = include_str!("../../static/css/core.css");
@@ -38,6 +93,7 @@ pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
                 .unwrap_or(&deck.config.transition);
             let classes = slide.attrs.class.as_deref().unwrap_or("");
             let notes: Vec<String> = slide.speaker_notes.iter().map(|n| n.text.clone()).collect();
+            let style = slide_style(slide);
 
             context! {
                 index => i,
@@ -45,6 +101,7 @@ pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
                 transition => transition,
                 classes => classes,
                 notes => notes,
+                style => style,
             }
         })
         .collect();
@@ -230,6 +287,79 @@ mod tests {
         let deck2 = parser::parse(input).unwrap();
         let rendered2 = render_deck(&deck2).unwrap();
         assert_eq!(rendered1.html, rendered2.html, "Same input should produce identical HTML");
+    }
+
+    #[test]
+    fn test_render_slide_html_single_slide() {
+        let deck = parser::parse("# First\n\n---\n\n# Second\n").unwrap();
+        let html = render_slide_html(&deck, 1).unwrap();
+        assert!(html.starts_with("<section class=\"slide"));
+        assert!(html.contains("data-index=\"1\""));
+        assert!(html.contains("<h1>Second</h1>"));
+        assert!(!html.contains("First"), "should only contain the requested slide");
+    }
+
+    #[test]
+    fn test_render_slide_html_out_of_range_errors() {
+        let deck = parser::parse("# Only\n").unwrap();
+        assert!(render_slide_html(&deck, 5).is_err());
+    }
+
+    #[test]
+    fn test_render_slide_html_matches_deck_section() {
+        // The inner slide markup should be byte-identical to what render_deck
+        // produces for the same slide (modulo surrounding whitespace).
+        let input = "# A\n\n--- {transition: fade, class: centered}\n\n# B\n";
+        let deck = parser::parse(input).unwrap();
+        let full = render_deck(&deck).unwrap().html;
+        let piece = render_slide_html(&deck, 1).unwrap();
+        let first_line = piece.lines().next().unwrap();
+        assert!(
+            full.contains(first_line),
+            "deck html should contain the opening <section> produced by render_slide_html:\n{}",
+            first_line
+        );
+    }
+
+    #[test]
+    fn test_render_per_slide_title_size() {
+        let input = "# A\n\n--- {title_size: 96px}\n\n# B\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(
+            rendered.html.contains("style=\"--title-size: 96px\""),
+            "expected inline style=\"--title-size: 96px\" on slide 2: {}",
+            rendered.html
+        );
+    }
+
+    #[test]
+    fn test_render_per_slide_both_sizes() {
+        let input = "# A\n\n--- {title_size: 40px, body_size: 20px}\n\n# B\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(rendered
+            .html
+            .contains("style=\"--title-size: 40px; --body-size: 20px\""));
+    }
+
+    #[test]
+    fn test_render_no_style_when_no_overrides() {
+        let input = "# A\n\n---\n\n# B\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(
+            !rendered.html.contains("style=\""),
+            "no slide should have an inline style when no overrides are set"
+        );
+    }
+
+    #[test]
+    fn test_render_slide_html_emits_style() {
+        let input = "# A\n\n--- {body_size: 20px}\n\n# B\n";
+        let deck = parser::parse(input).unwrap();
+        let html = render_slide_html(&deck, 1).unwrap();
+        assert!(html.contains("style=\"--body-size: 20px\""));
     }
 
     #[test]

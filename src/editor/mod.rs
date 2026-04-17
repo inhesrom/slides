@@ -28,41 +28,48 @@ fn is_separator(line: &str) -> bool {
     after_hyphens.is_empty() || after_hyphens.starts_with(' ') || after_hyphens.starts_with('{')
 }
 
+/// Attributes carried from a slide separator line into the next slide.
+#[derive(Default)]
+struct SeparatorAttrs {
+    transition: Option<String>,
+    class: Option<String>,
+    title_size: Option<String>,
+    body_size: Option<String>,
+}
+
 /// Parse separator attributes — mirrors `parser::parse_separator_attrs`.
-fn parse_separator_attrs(line: &str) -> (Option<String>, Option<String>) {
+fn parse_separator_attrs(line: &str) -> SeparatorAttrs {
     let trimmed = line.trim();
     let after_hyphens = trimmed.trim_start_matches('-').trim();
 
+    let mut out = SeparatorAttrs::default();
     if let Some(inner) = after_hyphens
         .strip_prefix('{')
         .and_then(|s| s.strip_suffix('}'))
     {
-        let mut transition = None;
-        let mut class = None;
         for part in inner.split(',') {
             let part = part.trim();
             if let Some((key, value)) = part.split_once(':') {
                 let key = key.trim();
                 let value = value.trim().trim_matches('"').trim_matches('\'');
                 match key {
-                    "transition" => transition = Some(value.to_string()),
-                    "class" => class = Some(value.to_string()),
+                    "transition" => out.transition = Some(value.to_string()),
+                    "class" => out.class = Some(value.to_string()),
+                    "title_size" => out.title_size = Some(value.to_string()),
+                    "body_size" => out.body_size = Some(value.to_string()),
                     _ => {}
                 }
             }
         }
-        (transition, class)
-    } else {
-        (None, None)
     }
+    out
 }
 
 /// Split the body into editor slides, preserving raw content.
 fn split_editor_slides(body: &str) -> Vec<EditorSlide> {
     let mut slides = Vec::new();
     let mut current_lines: Vec<&str> = Vec::new();
-    let mut current_transition: Option<String> = None;
-    let mut current_class: Option<String> = None;
+    let mut current_attrs = SeparatorAttrs::default();
     let mut first = true;
 
     for line in body.lines() {
@@ -73,8 +80,7 @@ fn split_editor_slides(body: &str) -> Vec<EditorSlide> {
                     let content = current_lines.join("\n");
                     slides.push(build_editor_slide(
                         &content,
-                        current_transition.take(),
-                        current_class.take(),
+                        std::mem::take(&mut current_attrs),
                     ));
                 }
                 first = false;
@@ -82,14 +88,11 @@ fn split_editor_slides(body: &str) -> Vec<EditorSlide> {
                 let content = current_lines.join("\n");
                 slides.push(build_editor_slide(
                     &content,
-                    current_transition.take(),
-                    current_class.take(),
+                    std::mem::take(&mut current_attrs),
                 ));
             }
             current_lines.clear();
-            let (t, c) = parse_separator_attrs(line);
-            current_transition = t;
-            current_class = c;
+            current_attrs = parse_separator_attrs(line);
         } else {
             current_lines.push(line);
         }
@@ -100,8 +103,7 @@ fn split_editor_slides(body: &str) -> Vec<EditorSlide> {
         let content = current_lines.join("\n");
         slides.push(build_editor_slide(
             &content,
-            current_transition.take(),
-            current_class.take(),
+            std::mem::take(&mut current_attrs),
         ));
     }
 
@@ -109,11 +111,7 @@ fn split_editor_slides(body: &str) -> Vec<EditorSlide> {
 }
 
 /// Build an EditorSlide from raw content, extracting notes and layout.
-fn build_editor_slide(
-    content: &str,
-    transition: Option<String>,
-    class: Option<String>,
-) -> EditorSlide {
+fn build_editor_slide(content: &str, attrs: SeparatorAttrs) -> EditorSlide {
     // Extract block notes (:::notes ... :::)
     let (notes, content) = extract_notes_raw(content);
 
@@ -122,8 +120,10 @@ fn build_editor_slide(
 
     EditorSlide {
         content: remaining_content.trim().to_string(),
-        transition,
-        class,
+        transition: attrs.transition,
+        class: attrs.class,
+        title_size: attrs.title_size,
+        body_size: attrs.body_size,
         notes,
         layout,
     }

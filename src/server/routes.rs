@@ -15,7 +15,9 @@ use tokio::sync::{Mutex, broadcast};
 use super::SharedDeck;
 use crate::editor;
 use crate::help;
+use crate::parser;
 use crate::presenter;
+use crate::render;
 
 /// Duration after an editor write during which reloads are treated as self-triggered.
 const WRITE_SUPPRESS_WINDOW: std::time::Duration = std::time::Duration::from_secs(2);
@@ -199,15 +201,13 @@ async fn handle_edit_ws(mut socket: WebSocket, state: AppState) {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         match handle_editor_message(&text, &state).await {
-                            Ok(needs_ack) => {
-                                // If no file was written, the watcher won't fire,
-                                // so send the ack directly to clear pendingSave.
-                                if needs_ack {
-                                    let saved_msg = serde_json::json!({ "type": "saved" });
-                                    if socket.send(Message::Text(saved_msg.to_string().into())).await.is_err() {
-                                        break;
-                                    }
+                            Ok(Some(reply)) => {
+                                if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
+                                    break;
                                 }
+                            }
+                            Ok(None) => {
+                                // Watcher will fire and deliver the ack via broadcast.
                             }
                             Err(e) => {
                                 let err_msg = serde_json::json!({
@@ -233,10 +233,16 @@ fn load_editor_state(file_path: &Path) -> anyhow::Result<editor::types::EditorDe
     editor::deck_to_editor(&input)
 }
 
-/// Handle an editor WebSocket message. Returns Ok(true) if the caller
-/// should send an immediate "saved" ack (because no file was written and
-/// the watcher won't fire), or Ok(false) if the watcher will handle it.
-async fn handle_editor_message(text: &str, state: &AppState) -> anyhow::Result<bool> {
+/// Handle an editor WebSocket message.
+///
+/// Returns `Ok(Some(reply))` when the caller should send `reply` directly to
+/// the client (e.g. a `"saved"` ack when no file was written, or rendered
+/// `"preview-html"` for a live-preview request). Returns `Ok(None)` when the
+/// file watcher will deliver the acknowledgement via broadcast instead.
+async fn handle_editor_message(
+    text: &str,
+    state: &AppState,
+) -> anyhow::Result<Option<serde_json::Value>> {
     let msg: serde_json::Value = serde_json::from_str(text)?;
 
     match msg.get("type").and_then(|t| t.as_str()) {
@@ -259,14 +265,36 @@ async fn handle_editor_message(text: &str, state: &AppState) -> anyhow::Result<b
                 }
                 std::fs::write(&state.file_path, &markdown)?;
                 tracing::debug!("Editor saved {}", state.file_path.display());
-                // Watcher will fire and trigger the ack via broadcast
-                Ok(false)
+                // Watcher will fire and deliver the ack via broadcast.
+                Ok(None)
             } else {
-                // No file change — send ack immediately
-                Ok(true)
+                // No file change — ack immediately.
+                Ok(Some(serde_json::json!({ "type": "saved" })))
             }
         }
-        _ => Ok(false),
+        Some("preview") => {
+            let deck: editor::types::EditorDeck = serde_json::from_value(
+                msg.get("deck")
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("Missing deck field"))?,
+            )?;
+            let slide_index = msg
+                .get("slide")
+                .and_then(|s| s.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("Missing slide field"))?
+                as usize;
+
+            let markdown = editor::serialize::serialize_deck(&deck);
+            let parsed = parser::parse(&markdown)?;
+            let html = render::render_slide_html(&parsed, slide_index)?;
+
+            Ok(Some(serde_json::json!({
+                "type": "preview-html",
+                "slide": slide_index,
+                "html": html,
+            })))
+        }
+        _ => Ok(None),
     }
 }
 
@@ -367,8 +395,8 @@ mod tests {
         let msg = serde_json::json!({ "type": "save", "deck": deck });
         let result = handle_editor_message(&msg.to_string(), &state).await.unwrap();
 
-        // Should return false (watcher will handle ack)
-        assert!(!result, "Should return false when file was written");
+        // Should return None (watcher will handle ack)
+        assert!(result.is_none(), "Should return None when file was written");
         // File should be updated
         let content = std::fs::read_to_string(&file_path).unwrap();
         assert!(content.contains("# New content"));
@@ -405,9 +433,62 @@ mod tests {
         let msg = serde_json::json!({ "type": "save", "deck": deck });
         let result = handle_editor_message(&msg.to_string(), &state).await.unwrap();
 
-        // Should return true (immediate ack needed, no file write)
-        assert!(result, "Should return true when content unchanged");
+        // Should return Some({"type":"saved"}) (immediate ack, no file write)
+        let reply = result.expect("expected immediate ack when content unchanged");
+        assert_eq!(reply["type"], "saved");
         // Write time should NOT be set
+        assert!(state.last_write_time.lock().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_preview_returns_rendered_slide_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("test.md");
+        // Seed with something so the preview path doesn't race a missing file.
+        std::fs::write(&file_path, "# Existing\n").unwrap();
+        let before = std::fs::read_to_string(&file_path).unwrap();
+
+        let state = AppState {
+            deck: Arc::new(tokio::sync::RwLock::new(
+                crate::render::render_deck(&crate::parser::parse("# Existing\n").unwrap()).unwrap(),
+            )),
+            tx: broadcast::channel(16).0,
+            deck_title: "Test".to_string(),
+            file_path: file_path.clone(),
+            last_write_time: Arc::new(Mutex::new(None)),
+        };
+
+        let deck = editor::types::EditorDeck {
+            config: editor::types::EditorConfig::from(
+                &crate::parser::frontmatter::DeckConfig::default(),
+            ),
+            slides: vec![
+                editor::types::EditorSlide {
+                    content: "# First".to_string(),
+                    ..editor::types::EditorSlide::default()
+                },
+                editor::types::EditorSlide {
+                    content: "# Second".to_string(),
+                    ..editor::types::EditorSlide::default()
+                },
+            ],
+        };
+
+        let msg = serde_json::json!({ "type": "preview", "slide": 1, "deck": deck });
+        let reply = handle_editor_message(&msg.to_string(), &state)
+            .await
+            .unwrap()
+            .expect("preview should return a reply");
+
+        assert_eq!(reply["type"], "preview-html");
+        assert_eq!(reply["slide"], 1);
+        let html = reply["html"].as_str().unwrap();
+        assert!(html.contains("<h1>Second</h1>"));
+        assert!(!html.contains("First"));
+
+        // Preview must never touch the file or the suppression window.
+        let after = std::fs::read_to_string(&file_path).unwrap();
+        assert_eq!(before, after, "preview must not rewrite the file");
         assert!(state.last_write_time.lock().await.is_none());
     }
 

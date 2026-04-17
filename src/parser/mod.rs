@@ -22,6 +22,10 @@ pub struct SlideAttrs {
     pub class: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timing: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_size: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -164,6 +168,8 @@ fn parse_separator_attrs(line: &str) -> SlideAttrs {
                     "transition" => attrs.transition = Some(value.to_string()),
                     "class" => attrs.class = Some(value.to_string()),
                     "timing" => attrs.timing = Some(value.to_string()),
+                    "title_size" => attrs.title_size = Some(value.to_string()),
+                    "body_size" => attrs.body_size = Some(value.to_string()),
                     _ => {}
                 }
             }
@@ -243,6 +249,31 @@ mod tests {
         assert!(attrs.transition.is_none());
         assert!(attrs.class.is_none());
         assert!(attrs.timing.is_none());
+        assert!(attrs.title_size.is_none());
+        assert!(attrs.body_size.is_none());
+    }
+
+    #[test]
+    fn test_attrs_title_size() {
+        let attrs = parse_separator_attrs("--- {title_size: 96px}");
+        assert_eq!(attrs.title_size.as_deref(), Some("96px"));
+        assert!(attrs.body_size.is_none());
+    }
+
+    #[test]
+    fn test_attrs_body_size() {
+        let attrs = parse_separator_attrs("--- {body_size: 20px}");
+        assert_eq!(attrs.body_size.as_deref(), Some("20px"));
+        assert!(attrs.title_size.is_none());
+    }
+
+    #[test]
+    fn test_attrs_sizes_combined_with_transition() {
+        let attrs =
+            parse_separator_attrs("--- {transition: fade, title_size: 40px, body_size: 20px}");
+        assert_eq!(attrs.transition.as_deref(), Some("fade"));
+        assert_eq!(attrs.title_size.as_deref(), Some("40px"));
+        assert_eq!(attrs.body_size.as_deref(), Some("20px"));
     }
 
     #[test]

@@ -53,6 +53,12 @@ pub struct EditorSlide {
     pub transition: Option<String>,
     /// Per-slide CSS class.
     pub class: Option<String>,
+    /// Per-slide title size override (CSS length, e.g. "96px").
+    #[serde(default)]
+    pub title_size: Option<String>,
+    /// Per-slide body size override (CSS length, e.g. "20px").
+    #[serde(default)]
+    pub body_size: Option<String>,
     /// Speaker notes (block notes content, may contain markdown).
     pub notes: String,
     /// Layout directive with region content.
@@ -65,6 +71,8 @@ impl Default for EditorSlide {
             content: String::new(),
             transition: None,
             class: None,
+            title_size: None,
+            body_size: None,
             notes: String::new(),
             layout: None,
         }
@@ -117,6 +125,8 @@ mod tests {
         assert!(slide.content.is_empty());
         assert!(slide.transition.is_none());
         assert!(slide.class.is_none());
+        assert!(slide.title_size.is_none());
+        assert!(slide.body_size.is_none());
         assert!(slide.notes.is_empty());
         assert!(slide.layout.is_none());
     }

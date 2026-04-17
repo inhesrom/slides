@@ -66,6 +66,12 @@ pub fn editor_html() -> String {
           </select>
           <label class="checkbox-label"><input type="checkbox" id="slide-centered" onchange="onCenteredChange()"> Centered</label>
         </div>
+        <div class="field-row">
+          <label>Title Size</label>
+          <input type="number" id="slide-title-size" class="size-input" min="20" max="200" step="1" placeholder="deck default" oninput="scheduleSave()"> px
+          <label>Body Size</label>
+          <input type="number" id="slide-body-size" class="size-input" min="10" max="120" step="1" placeholder="deck default" oninput="scheduleSave()"> px
+        </div>
         <div class="toolbar" id="toolbar">
           <button onclick="toolBold()" title="Bold (Ctrl+B)"><b>B</b></button>
           <button onclick="toolItalic()" title="Italic (Ctrl+I)"><i>I</i></button>
@@ -166,6 +172,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .field-row { display: flex; align-items: center; gap: 0.5rem; }
 .field-row label { font-size: 0.75rem; color: #94a3b8; min-width: 80px; }
 .field-row select, .field-row input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+.field-row input.size-input { width: 8em; }
 .layout-params-input { width: 100px; }
 .checkbox-label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; }
 
@@ -240,6 +247,11 @@ const EDITOR_JS: &str = r##"
   var SAVE_SUPPRESS_WINDOW = 3000; // ms - ignore reloads after own save
   var lastPreviewRefresh = 0;
   var REFRESH_COOLDOWN = 800; // ms - ignore duplicate reloads
+  var previewTimer = null;
+  var PREVIEW_DEBOUNCE = 150; // ms - live per-slide render cadence
+  // Set by structural edits (add/delete/move slide, deck config) so the
+  // post-save path does a full iframe reload instead of in-place patch.
+  var needsFullReload = false;
 
   // --- DOM refs ---
   var slideListItems = document.getElementById('slide-list-items');
@@ -271,7 +283,27 @@ const EDITOR_JS: &str = r##"
       } else if (data.type === 'saved') {
         pendingSave = false;
         setStatus('Saved', '');
-        refreshPreview();
+        // Only reload the iframe for structural changes; content edits have
+        // already been patched in place via 'preview-html'.
+        if (needsFullReload) {
+          needsFullReload = false;
+          refreshPreview();
+        }
+      } else if (data.type === 'preview-html') {
+        if (typeof data.slide === 'number' && typeof data.html === 'string'
+            && previewFrame.contentWindow) {
+          previewFrame.contentWindow.postMessage({
+            type: 'update-slide',
+            index: data.slide,
+            html: data.html
+          }, '*');
+          // Re-apply the "reveal all" preview flag (any newly-added fragments
+          // start hidden) and refresh the overflow warning for the new layout.
+          setTimeout(function() {
+            applyFragmentReveal();
+            checkOverflow();
+          }, 20);
+        }
       } else if (data.type === 'reload') {
         // Ignore reloads that are likely self-triggered from our own save
         var timeSinceSave = Date.now() - lastSaveTime;
@@ -354,6 +386,12 @@ const EDITOR_JS: &str = r##"
     // Transition + centered
     slideTransition.value = slide.transition || '';
     document.getElementById('slide-centered').checked = (slide.class || '').indexOf('centered') >= 0;
+
+    // Per-slide size overrides (px only in the UI, empty = use deck default)
+    var ts = document.getElementById('slide-title-size');
+    var bs = document.getElementById('slide-body-size');
+    ts.value = slide.title_size ? (parseInt(slide.title_size, 10) || '') : '';
+    bs.value = slide.body_size ? (parseInt(slide.body_size, 10) || '') : '';
 
     // Notes
     notesEl.value = slide.notes;
@@ -477,6 +515,10 @@ const EDITOR_JS: &str = r##"
 
     slide.transition = slideTransition.value || null;
     slide.class = document.getElementById('slide-centered').checked ? 'centered' : null;
+    var tsVal = document.getElementById('slide-title-size').value;
+    var bsVal = document.getElementById('slide-body-size').value;
+    slide.title_size = tsVal ? (tsVal + 'px') : null;
+    slide.body_size = bsVal ? (bsVal + 'px') : null;
     slide.notes = notesEl.value;
 
     // Deck config
@@ -494,6 +536,9 @@ const EDITOR_JS: &str = r##"
     if (saveTimer) clearTimeout(saveTimer);
     setStatus('Editing...', 'saving');
     saveTimer = setTimeout(sendSave, SAVE_DEBOUNCE);
+    // Live per-slide render: skip for structural edits — those need a full
+    // reload once the save completes and would patch stale DOM indices.
+    if (!needsFullReload) schedulePreview();
   };
 
   function sendSave() {
@@ -508,14 +553,59 @@ const EDITOR_JS: &str = r##"
     setStatus('Saving...', 'saving');
   }
 
+  function schedulePreview() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(sendPreview, PREVIEW_DEBOUNCE);
+  }
+
+  function sendPreview() {
+    previewTimer = null;
+    if (!deck || !ws || ws.readyState !== WebSocket.OPEN) return;
+    syncFromDOM();
+    ws.send(JSON.stringify({
+      type: 'preview',
+      slide: selectedSlide,
+      deck: deck
+    }));
+  }
+
+  // Structural edits (add/delete/move/layout/deck config) can't be patched
+  // in place because slide indices shift or CSS scope changes. Mark the
+  // next save as needing a full iframe reload, and cancel any pending
+  // per-slide preview so we don't patch stale DOM.
+  function markStructural() {
+    needsFullReload = true;
+    if (previewTimer) {
+      clearTimeout(previewTimer);
+      previewTimer = null;
+    }
+  }
+
   // --- Slide management ---
-  window.selectSlide = function(index) {
+  window.selectSlide = function(index, opts) {
+    opts = opts || {};
+    // When the preview drives the change, don't yank focus out of a textarea
+    // mid-edit: renderEditPanel() overwrites textarea values and would lose
+    // cursor state or pending keystrokes.
+    if (opts.fromPreview && document.activeElement &&
+        document.activeElement.tagName === 'TEXTAREA') {
+      return;
+    }
     syncFromDOM();
     selectedSlide = index;
     renderSlideList();
     renderEditPanel();
-    refreshPreview();
+    if (!opts.fromPreview) refreshPreview();
   };
+
+  // Preview iframe → editor: keep list + edit panel aligned with whatever
+  // slide the preview is currently showing.
+  window.addEventListener('message', function(e) {
+    if (!e.data || e.data.type !== 'preview-slide-change') return;
+    if (typeof e.data.slide !== 'number') return;
+    if (e.data.slide === selectedSlide) return;
+    selectSlide(e.data.slide, { fromPreview: true });
+  });
 
   window.addSlide = function() {
     syncFromDOM();
@@ -523,12 +613,15 @@ const EDITOR_JS: &str = r##"
       content: '## New Slide\n\n',
       transition: null,
       class: null,
+      title_size: null,
+      body_size: null,
       notes: '',
       layout: null
     };
     deck.slides.splice(selectedSlide + 1, 0, newSlide);
     selectedSlide = selectedSlide + 1;
     renderAll();
+    markStructural();
     scheduleSave();
   };
 
@@ -537,6 +630,7 @@ const EDITOR_JS: &str = r##"
     deck.slides.splice(selectedSlide, 1);
     if (selectedSlide >= deck.slides.length) selectedSlide = deck.slides.length - 1;
     renderAll();
+    markStructural();
     scheduleSave();
   };
 
@@ -548,6 +642,7 @@ const EDITOR_JS: &str = r##"
     deck.slides[selectedSlide - 1] = tmp;
     selectedSlide--;
     renderAll();
+    markStructural();
     scheduleSave();
   };
 
@@ -559,6 +654,7 @@ const EDITOR_JS: &str = r##"
     deck.slides[selectedSlide + 1] = tmp;
     selectedSlide++;
     renderAll();
+    markStructural();
     scheduleSave();
   };
 
@@ -590,6 +686,7 @@ const EDITOR_JS: &str = r##"
     }
 
     renderEditPanel();
+    markStructural();
     scheduleSave();
   };
 
@@ -764,9 +861,16 @@ const EDITOR_JS: &str = r##"
   });
 
   // --- Deck settings auto-save ---
+  // Deck config (theme/aspect/color/sizes/transition/title) applies to the
+  // whole document, so every change needs a full iframe reload — not an
+  // in-place single-slide patch.
+  function onDeckSettingChange() {
+    markStructural();
+    scheduleSave();
+  }
   document.querySelectorAll('#deck-settings input, #deck-settings select').forEach(function(el) {
-    el.addEventListener('input', scheduleSave);
-    el.addEventListener('change', scheduleSave);
+    el.addEventListener('input', onDeckSettingChange);
+    el.addEventListener('change', onDeckSettingChange);
   });
 
   // --- Utilities ---
