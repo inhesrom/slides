@@ -23,6 +23,7 @@
 
   function showSlide(index) {
     if (index < 0 || index >= total) return;
+    if (index === current) return;
     slides[current].classList.remove('active');
     slides[current].classList.remove('enter-forward', 'enter-backward');
     var direction = index > current ? 'forward' : 'backward';
