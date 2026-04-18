@@ -1,7 +1,19 @@
 use pulldown_cmark::{html, Options, Parser};
 
 /// Marker inserted for `+` list items so we can find them in the HTML output.
-const FRAGMENT_MARKER: &str = "\u{FEFF}";
+///
+/// Uses an inline HTML `<span>` rather than a lone invisible character because
+/// the marker sits directly before list-item content, and CommonMark's
+/// emphasis flanking rules require a preceding whitespace or punctuation
+/// character for `**_...` style nested emphasis to open. The marker's
+/// trailing `>` is ASCII punctuation and satisfies the rule. A bare U+FEFF
+/// is neither whitespace nor punctuation, so it broke `**_text_**`. An HTML
+/// comment (`<!--f-->`) is worse: CommonMark treats it as a block-HTML start,
+/// which swallows the rest of the line as raw HTML and prevents inline
+/// markdown parsing entirely. A `<span>` tag is never block-level in
+/// CommonMark's block-HTML rules, so pulldown-cmark keeps it as inline HTML
+/// and parses surrounding emphasis normally.
+const FRAGMENT_MARKER: &str = "<span data-f></span>";
 
 /// Render markdown to HTML without any slide-specific transformations.
 ///
@@ -344,6 +356,50 @@ mod tests {
         assert!(result.contains("fragment"), "Got: {}", result);
         assert!(result.contains("highlight"), "Got: {}", result);
     }
+
+    #[test]
+    fn test_plus_marker_preserves_inline_bold() {
+        let result = render("+ **Bold** text");
+        assert!(result.contains("<strong>Bold</strong>"), "Got: {}", result);
+        assert!(!result.contains("**"), "Literal ** leaked: {}", result);
+    }
+
+    #[test]
+    fn test_ordered_plus_marker_preserves_inline_bold() {
+        let result = render("1+ **The Title** of Ecclesiastes");
+        assert!(result.contains("<strong>The Title</strong>"), "Got: {}", result);
+        assert!(!result.contains("**"), "Literal ** leaked: {}", result);
+    }
+
+    #[test]
+    fn test_ordered_plus_marker_preserves_inline_italic() {
+        let result = render("1+ *italic* text");
+        assert!(result.contains("<em>italic</em>"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_plus_marker_preserves_bold_italic_combo() {
+        let result = render("+ **_The Title_** of Ecclesiastes");
+        assert!(
+            result.contains("<strong><em>The Title</em></strong>"),
+            "Got: {}",
+            result
+        );
+        assert!(!result.contains("**"), "Literal ** leaked: {}", result);
+    }
+
+    #[test]
+    fn test_ordered_plus_marker_preserves_bold_italic_combo() {
+        let result = render("1+ **_The Title_** of Ecclesiastes");
+        assert!(
+            result.contains("<strong><em>The Title</em></strong>"),
+            "Got: {}",
+            result
+        );
+        assert!(!result.contains("**"), "Literal ** leaked: {}", result);
+    }
+
+
 
     #[test]
     fn test_render_plain_does_not_make_ordered_fragments() {
