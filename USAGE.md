@@ -20,6 +20,8 @@ Active in the browser while viewing or presenting a deck.
 | `F` | Toggle fullscreen |
 | `D` | Toggle dark mode |
 | `P` | Open presenter view |
+| `+` / `=` | (Presenter view) Increase notes font size for current slide |
+| `-` | (Presenter view) Decrease notes font size for current slide |
 | `Esc` | Exit fullscreen |
 
 Touch: swipe left / right to navigate.

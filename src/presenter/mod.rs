@@ -27,7 +27,13 @@ pub fn presenter_html(deck_title: &str) -> String {
       </div>
       <div class="info-panel">
         <div class="notes" id="notes">
-          <h3>Speaker Notes</h3>
+          <div class="notes-header">
+            <h3>Speaker Notes</h3>
+            <div class="notes-size-controls">
+              <button type="button" id="notes-size-dec" aria-label="Decrease notes font size">−</button>
+              <button type="button" id="notes-size-inc" aria-label="Increase notes font size">+</button>
+            </div>
+          </div>
           <div id="notes-content">No notes for this slide.</div>
         </div>
         <div class="controls">
@@ -67,10 +73,14 @@ body { background: #1a1a2e; color: #e2e8f0; font-family: system-ui, sans-serif; 
 /* Iframes render at full presentation size, scaled down */
 .slide-frame { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: none; transform-origin: top left; }
 
-.info-panel { flex: 1; display: flex; flex-direction: column; gap: 1rem; }
-.notes { flex: 1; background: #0f172a; border-radius: 8px; padding: 1.5rem; overflow-y: auto; }
-.notes h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.75rem; }
-#notes-content { font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap; }
+.info-panel { flex: 1; display: flex; flex-direction: column; gap: 1rem; min-height: 0; }
+.notes { flex: 1; background: #0f172a; border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column; min-height: 0; }
+.notes-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-shrink: 0; }
+.notes-header h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin: 0; }
+.notes-size-controls { display: flex; gap: 0.25rem; }
+.notes-size-controls button { background: #334155; color: #e2e8f0; border: none; width: 1.75rem; height: 1.75rem; border-radius: 4px; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; }
+.notes-size-controls button:hover { background: #475569; }
+#notes-content { font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap; flex: 1; overflow-y: auto; min-height: 0; }
 .controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; padding: 1rem; background: #0f172a; border-radius: 8px; }
 .timer { font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .progress { font-size: 1.1rem; color: #94a3b8; }
@@ -112,6 +122,11 @@ const PRESENTER_JS: &str = r#"
   var currentFragments = 0; // how many fragments are currently visible
   var totalSlides = 0;
   var slidesData = []; // [{notes, fragmentCount}, ...]
+  var notesFontSizes = {}; // slide index -> px size (per-session override)
+  var DEFAULT_NOTES_PX = 17.6; // matches 1.1rem at 16px root
+  var MIN_NOTES_PX = 10;
+  var MAX_NOTES_PX = 48;
+  var NOTES_STEP_PX = 2;
   var timerStart = Date.now();
   var timerRunning = true;
   var timerOffset = 0;
@@ -232,6 +247,7 @@ const PRESENTER_JS: &str = r#"
     } else {
       notesEl.textContent = 'No notes for this slide.';
     }
+    applyNotesFontSize();
 
     // Update progress
     var fragInfo = '';
@@ -266,8 +282,41 @@ const PRESENTER_JS: &str = r#"
     }
   }
 
+  // Per-slide notes font size
+  function applyNotesFontSize() {
+    var px = notesFontSizes[currentSlide] || DEFAULT_NOTES_PX;
+    notesEl.style.fontSize = px + 'px';
+  }
+
+  function adjustNotesFontSize(delta) {
+    var current = notesFontSizes[currentSlide] || DEFAULT_NOTES_PX;
+    var next = Math.max(MIN_NOTES_PX, Math.min(MAX_NOTES_PX, current + delta));
+    notesFontSizes[currentSlide] = next;
+    applyNotesFontSize();
+  }
+
+  document.getElementById('notes-size-inc').addEventListener('click', function() {
+    adjustNotesFontSize(NOTES_STEP_PX);
+  });
+  document.getElementById('notes-size-dec').addEventListener('click', function() {
+    adjustNotesFontSize(-NOTES_STEP_PX);
+  });
+
   // Keyboard navigation
   document.addEventListener('keydown', function(e) {
+    // Notes font-size shortcuts — skip when a modifier is held so browser zoom still works
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        adjustNotesFontSize(NOTES_STEP_PX);
+        return;
+      }
+      if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        adjustNotesFontSize(-NOTES_STEP_PX);
+        return;
+      }
+    }
     switch(e.key) {
       case 'ArrowRight':
       case 'ArrowDown':
