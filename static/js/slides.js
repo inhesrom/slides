@@ -4,6 +4,22 @@
   var current = 0;
   var slides = document.querySelectorAll('.slide');
   var total = slides.length;
+  var deckEl = document.querySelector('.deck');
+
+  // Scale the fixed-size deck canvas to fit the window. px values inside the
+  // deck are tied to the reference canvas (1920x1080 for 16:9, 1440x1080 for
+  // 4:3 — see core.css .deck.aspect-*), so font sizes look visually identical
+  // at every viewport size and match what the editor preview shows.
+  function scaleDeck() {
+    if (!deckEl) return;
+    var dw = deckEl.offsetWidth;
+    var dh = deckEl.offsetHeight;
+    if (!dw || !dh) return;
+    var scale = Math.min(window.innerWidth / dw, window.innerHeight / dh);
+    document.documentElement.style.setProperty('--deck-scale', scale);
+  }
+  scaleDeck();
+  window.addEventListener('resize', scaleDeck);
 
   function showSlide(index) {
     if (index < 0 || index >= total) return;

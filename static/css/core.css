@@ -15,17 +15,32 @@ html, body {
   background: var(--color-bg);
 }
 
+/* Stage: center the fixed-size deck in the viewport and scale it to fit.
+   px values inside the deck stay tied to the reference canvas so font sizes
+   look visually identical at every viewport size. */
+body.deck-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .deck {
-  width: 100vw;
-  height: 100vh;
   position: relative;
+  transform-origin: center center;
+  transform: scale(var(--deck-scale, 1));
+  flex-shrink: 0;
+  background: var(--color-bg);
 }
 
 .deck.aspect-16-9 {
+  width: 1920px;
+  height: 1080px;
   --slide-aspect: 16 / 9;
 }
 
 .deck.aspect-4-3 {
+  width: 1440px;
+  height: 1080px;
   --slide-aspect: 4 / 3;
 }
 

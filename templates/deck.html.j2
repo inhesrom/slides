@@ -7,12 +7,14 @@
   <style>{{ core_css | safe }}{{ theme_css | safe }}
 :root { --title-size: {{ title_size }}; --body-size: {{ body_size }}; }</style>
 </head>
-<body class="deck aspect-{{ aspect }}">
+<body class="deck-body">
+  <div class="deck aspect-{{ aspect }}">
   {% for slide in slides %}
   <section class="slide {{ slide.classes }}" data-index="{{ slide.index }}" data-transition="{{ slide.transition }}"{% if slide.hidden %} data-hidden="true"{% endif %}{% if slide.style %} style="{{ slide.style }}"{% endif %}{% if slide.notes %} data-notes="{{ slide.notes | join('\n') }}"{% endif %}>
     {{ slide.html | safe }}
   </section>
   {% endfor %}
+  </div>
   <div id="progress-bar"><div id="progress-fill"></div></div>
   <script>{{ slides_js | safe }}</script>
 </body>
