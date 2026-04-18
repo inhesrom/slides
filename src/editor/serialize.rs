@@ -62,6 +62,7 @@ fn has_separator_attrs(slide: &EditorSlide) -> bool {
         || slide.class.is_some()
         || slide.title_size.is_some()
         || slide.body_size.is_some()
+        || slide.hidden == Some(true)
 }
 
 /// Serialize a slide separator line with optional attributes.
@@ -78,6 +79,9 @@ fn serialize_separator(slide: &EditorSlide) -> String {
     }
     if let Some(v) = &slide.body_size {
         attrs.push(format!("body_size: {}", v));
+    }
+    if slide.hidden == Some(true) {
+        attrs.push("hidden: true".to_string());
     }
 
     if attrs.is_empty() {
@@ -371,6 +375,68 @@ mod tests {
         assert!(reparsed.slides[0].body_size.is_none());
         assert_eq!(reparsed.slides[1].title_size.as_deref(), Some("96px"));
         assert_eq!(reparsed.slides[1].body_size.as_deref(), Some("20px"));
+    }
+
+    #[test]
+    fn test_serialize_slide_with_hidden() {
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![
+                EditorSlide::default(),
+                EditorSlide {
+                    content: "# Draft".to_string(),
+                    hidden: Some(true),
+                    ..EditorSlide::default()
+                },
+            ],
+        };
+        let md = serialize_deck(&deck);
+        assert!(md.contains("--- {hidden: true}"), "got: {md}");
+    }
+
+    #[test]
+    fn test_serialize_hidden_false_omitted() {
+        // Some(false) should not emit a noise separator — it's the default state.
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![
+                EditorSlide::default(),
+                EditorSlide {
+                    content: "# Visible".to_string(),
+                    hidden: Some(false),
+                    ..EditorSlide::default()
+                },
+            ],
+        };
+        let md = serialize_deck(&deck);
+        assert!(!md.contains("hidden:"), "got: {md}");
+    }
+
+    #[test]
+    fn test_round_trip_hidden() {
+        let deck = EditorDeck {
+            config: default_config(),
+            slides: vec![
+                EditorSlide {
+                    content: "# First".to_string(),
+                    ..EditorSlide::default()
+                },
+                EditorSlide {
+                    content: "# Draft".to_string(),
+                    hidden: Some(true),
+                    ..EditorSlide::default()
+                },
+                EditorSlide {
+                    content: "# Third".to_string(),
+                    ..EditorSlide::default()
+                },
+            ],
+        };
+        let md = serialize_deck(&deck);
+        let reparsed = crate::editor::deck_to_editor(&md).unwrap();
+        assert!(reparsed.slides[0].hidden.is_none());
+        assert_eq!(reparsed.slides[1].hidden, Some(true));
+        assert!(reparsed.slides[2].hidden.is_none());
     }
 
     #[test]

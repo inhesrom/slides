@@ -35,6 +35,7 @@ struct SeparatorAttrs {
     class: Option<String>,
     title_size: Option<String>,
     body_size: Option<String>,
+    hidden: Option<bool>,
 }
 
 /// Parse separator attributes — mirrors `parser::parse_separator_attrs`.
@@ -57,6 +58,13 @@ fn parse_separator_attrs(line: &str) -> SeparatorAttrs {
                     "class" => out.class = Some(value.to_string()),
                     "title_size" => out.title_size = Some(value.to_string()),
                     "body_size" => out.body_size = Some(value.to_string()),
+                    "hidden" => {
+                        out.hidden = match value.to_ascii_lowercase().as_str() {
+                            "true" | "yes" | "1" => Some(true),
+                            "false" | "no" | "0" => Some(false),
+                            _ => None,
+                        };
+                    }
                     _ => {}
                 }
             }
@@ -124,6 +132,7 @@ fn build_editor_slide(content: &str, attrs: SeparatorAttrs) -> EditorSlide {
         class: attrs.class,
         title_size: attrs.title_size,
         body_size: attrs.body_size,
+        hidden: attrs.hidden,
         notes,
         layout,
     }

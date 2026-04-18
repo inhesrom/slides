@@ -70,6 +70,7 @@ Attach per-slide attributes in curly braces after the separator:
 --- {class: centered}
 --- {timing: 45s}
 --- {title_size: 96px, body_size: 20px}
+--- {hidden: true}
 --- {transition: fade, class: centered, timing: 30s}
 ```
 
@@ -80,6 +81,7 @@ Attach per-slide attributes in curly braces after the separator:
 | `timing` | duration (e.g. `45s`) | Target speaking time, surfaced in presenter mode |
 | `title_size` | CSS length (e.g. `96px`) | Override the deck `title_size` for this slide only |
 | `body_size` | CSS length (e.g. `20px`) | Override the deck `body_size` for this slide only |
+| `hidden` | `true` \| `false` | When `true`, skip the slide in the presentation and presenter views — it stays in the source and in the editor (marked `HIDDEN`) |
 
 Size overrides accept any CSS length in hand-authored markdown, but — just like
 the deck-level `title_size` / `body_size` — the editor UI only works with `px`
@@ -97,6 +99,20 @@ title pages and section dividers.
 # My Presentation
 
 Subtitle goes here
+```
+
+### Hidden Slides
+
+`hidden: true` keeps a slide in the source and in the editor but removes it
+from the presentation (`/`), presenter view, and exports. Useful for drafts,
+speaker-notes-only asides, or variants you want to keep around but skip on
+the day. Toggle it from the editor's hide button (👁 next to move/delete) or
+write it by hand:
+
+```markdown
+--- {hidden: true}
+
+# Draft — not shown in the presentation
 ```
 
 ---

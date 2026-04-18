@@ -18,7 +18,11 @@ static LAST_OVERFLOW_SIG: Mutex<Option<Vec<(usize, u32)>>> = Mutex::new(None);
 
 #[allow(dead_code)]
 pub struct RenderedDeck {
+    /// Public HTML served at `/` — hidden slides are filtered out.
     pub html: String,
+    /// Editor-preview HTML — all slides included, hidden ones marked with
+    /// the `slide-hidden` class and `data-hidden="true"`.
+    pub editor_html: String,
     pub overflows: Vec<OverflowResult>,
 }
 
@@ -39,11 +43,12 @@ pub fn render_slide_html(deck: &Deck, index: usize) -> Result<String> {
         .transition
         .as_deref()
         .unwrap_or(&deck.config.transition);
-    let classes = slide.attrs.class.as_deref().unwrap_or("");
+    let classes = slide_classes(slide);
     let notes: Vec<String> = slide.speaker_notes.iter().map(|n| n.text.clone()).collect();
     let style = slide_style(slide);
+    let hidden = slide.attrs.hidden == Some(true);
 
-    let template_str = r#"<section class="slide {{ classes }}" data-index="{{ index }}" data-transition="{{ transition }}"{% if style %} style="{{ style }}"{% endif %}{% if notes %} data-notes="{{ notes | join('\n') }}"{% endif %}>
+    let template_str = r#"<section class="slide {{ classes }}" data-index="{{ index }}" data-transition="{{ transition }}"{% if hidden %} data-hidden="true"{% endif %}{% if style %} style="{{ style }}"{% endif %}{% if notes %} data-notes="{{ notes | join('\n') }}"{% endif %}>
 {{ html | safe }}
 </section>"#;
 
@@ -57,9 +62,25 @@ pub fn render_slide_html(deck: &Deck, index: usize) -> Result<String> {
         classes => classes,
         notes => notes,
         style => style,
+        hidden => hidden,
     })?;
 
     Ok(html)
+}
+
+/// Compose the space-separated class list for a slide's `<section>`, merging
+/// per-slide `class:` attribute with any synthesized markers (e.g. `slide-hidden`).
+fn slide_classes(slide: &crate::parser::Slide) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    if let Some(c) = slide.attrs.class.as_deref()
+        && !c.is_empty()
+    {
+        parts.push(c);
+    }
+    if slide.attrs.hidden == Some(true) {
+        parts.push("slide-hidden");
+    }
+    parts.join(" ")
 }
 
 /// Build an inline `style="…"` value from per-slide size overrides, or empty
@@ -87,58 +108,28 @@ pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
 
     let mut env = Environment::new();
     env.add_template("deck.html.j2", template_str)?;
-
     let tmpl = env.get_template("deck.html.j2")?;
 
-    let slides_data: Vec<minijinja::Value> = deck
-        .slides
-        .iter()
-        .enumerate()
-        .map(|(i, slide)| {
-            let transition = slide
-                .attrs
-                .transition
-                .as_deref()
-                .unwrap_or(&deck.config.transition);
-            let classes = slide.attrs.class.as_deref().unwrap_or("");
-            let notes: Vec<String> = slide.speaker_notes.iter().map(|n| n.text.clone()).collect();
-            let style = slide_style(slide);
+    let html = render_with(
+        &tmpl,
+        deck,
+        core_css,
+        &theme_css,
+        slides_js,
+        /* include_hidden */ false,
+    )?;
+    let editor_html = render_with(
+        &tmpl,
+        deck,
+        core_css,
+        &theme_css,
+        slides_js,
+        /* include_hidden */ true,
+    )?;
 
-            context! {
-                index => i,
-                html => slide.html,
-                transition => transition,
-                classes => classes,
-                notes => notes,
-                style => style,
-            }
-        })
-        .collect();
-
-    let title = deck
-        .config
-        .title
-        .as_deref()
-        .unwrap_or("Slides");
-    let aspect = deck.config.aspect.class_name();
-    let color_scheme = &deck.config.color_scheme;
-
-    let title_size = &deck.config.title_size;
-    let body_size = &deck.config.body_size;
-
-    let html = tmpl.render(context! {
-        title => title,
-        aspect => aspect,
-        color_scheme => color_scheme,
-        title_size => title_size,
-        body_size => body_size,
-        core_css => core_css,
-        theme_css => theme_css,
-        slides_js => slides_js,
-        slides => slides_data,
-    })?;
-
-    // Check for overflow
+    // Check for overflow across the whole deck (hidden slides included, since
+    // a surprise un-hide shouldn't suddenly reveal an overflow the author
+    // never saw).
     let slides_html: Vec<String> = deck.slides.iter().map(|s| s.html.clone()).collect();
     let overflows = solver::check_overflow(&slides_html, &deck.config.aspect);
 
@@ -158,7 +149,69 @@ pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
         *last = Some(sig);
     }
 
-    Ok(RenderedDeck { html, overflows })
+    Ok(RenderedDeck {
+        html,
+        editor_html,
+        overflows,
+    })
+}
+
+fn render_with(
+    tmpl: &minijinja::Template<'_, '_>,
+    deck: &Deck,
+    core_css: &str,
+    theme_css: &str,
+    slides_js: &str,
+    include_hidden: bool,
+) -> Result<String> {
+    let slides_data: Vec<minijinja::Value> = deck
+        .slides
+        .iter()
+        .filter(|s| include_hidden || s.attrs.hidden != Some(true))
+        .enumerate()
+        .map(|(i, slide)| {
+            let transition = slide
+                .attrs
+                .transition
+                .as_deref()
+                .unwrap_or(&deck.config.transition);
+            let classes = slide_classes(slide);
+            let notes: Vec<String> = slide.speaker_notes.iter().map(|n| n.text.clone()).collect();
+            let style = slide_style(slide);
+            let hidden = slide.attrs.hidden == Some(true);
+
+            context! {
+                index => i,
+                html => slide.html,
+                transition => transition,
+                classes => classes,
+                notes => notes,
+                style => style,
+                hidden => hidden,
+            }
+        })
+        .collect();
+
+    let title = deck.config.title.as_deref().unwrap_or("Slides");
+    let aspect = deck.config.aspect.class_name();
+    let color_scheme = &deck.config.color_scheme;
+
+    let title_size = &deck.config.title_size;
+    let body_size = &deck.config.body_size;
+
+    let html = tmpl.render(context! {
+        title => title,
+        aspect => aspect,
+        color_scheme => color_scheme,
+        title_size => title_size,
+        body_size => body_size,
+        core_css => core_css,
+        theme_css => theme_css,
+        slides_js => slides_js,
+        slides => slides_data,
+    })?;
+
+    Ok(html)
 }
 
 #[cfg(test)]
@@ -377,6 +430,99 @@ mod tests {
         let deck = parser::parse(input).unwrap();
         let html = render_slide_html(&deck, 1).unwrap();
         assert!(html.contains("style=\"--body-size: 20px\""));
+    }
+
+    #[test]
+    fn test_render_hidden_slide_absent_from_public_html() {
+        let input = "# A\n\n--- {hidden: true}\n\n# Draft\n\n---\n\n# C\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(rendered.html.contains("<h1>A</h1>"));
+        assert!(rendered.html.contains("<h1>C</h1>"));
+        assert!(
+            !rendered.html.contains("<h1>Draft</h1>"),
+            "hidden slide must not appear in public HTML: {}",
+            rendered.html
+        );
+        let public_count = rendered.html.matches("<section class=\"slide").count();
+        assert_eq!(public_count, 2, "public HTML should contain 2 slides");
+    }
+
+    #[test]
+    fn test_render_hidden_slide_present_in_editor_html() {
+        let input = "# A\n\n--- {hidden: true}\n\n# Draft\n\n---\n\n# C\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(rendered.editor_html.contains("<h1>Draft</h1>"));
+        assert!(
+            rendered.editor_html.contains("data-hidden=\"true\""),
+            "editor HTML should mark hidden slide: {}",
+            rendered.editor_html
+        );
+        assert!(
+            rendered.editor_html.contains("slide-hidden"),
+            "editor HTML should include slide-hidden class"
+        );
+        let editor_count = rendered
+            .editor_html
+            .matches("<section class=\"slide")
+            .count();
+        assert_eq!(editor_count, 3, "editor HTML should contain 3 slides");
+    }
+
+    #[test]
+    fn test_render_public_indices_compact_when_hidden() {
+        // With a hidden middle slide, public-view indices should be 0, 1
+        // (compacted) — not 0, 2.
+        let input = "# A\n\n--- {hidden: true}\n\n# Draft\n\n---\n\n# C\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        assert!(rendered.html.contains("data-index=\"0\""));
+        assert!(rendered.html.contains("data-index=\"1\""));
+        assert!(!rendered.html.contains("data-index=\"2\""));
+    }
+
+    #[test]
+    fn test_render_no_hidden_slides_identical_variants_content() {
+        // When nothing is hidden, both variants should reference the same
+        // three slides (they may differ only in inconsequential whitespace).
+        let input = "# A\n\n---\n\n# B\n\n---\n\n# C\n";
+        let deck = parser::parse(input).unwrap();
+        let rendered = render_deck(&deck).unwrap();
+        let public_count = rendered.html.matches("<section class=\"slide").count();
+        let editor_count = rendered
+            .editor_html
+            .matches("<section class=\"slide")
+            .count();
+        assert_eq!(public_count, editor_count);
+        assert_eq!(public_count, 3);
+    }
+
+    #[test]
+    fn test_render_all_hidden_produces_empty_public_deck() {
+        // Frontmatter block guards the leading separator from being swallowed
+        // as a YAML open.
+        let input = "---\ntitle: T\n---\n\n--- {hidden: true}\n\n# A\n\n--- {hidden: true}\n\n# B\n";
+        let deck = parser::parse(input).unwrap();
+        assert_eq!(deck.slides.len(), 2, "expected 2 parsed slides");
+        assert_eq!(deck.slides[0].attrs.hidden, Some(true));
+        assert_eq!(deck.slides[1].attrs.hidden, Some(true));
+        let rendered = render_deck(&deck).unwrap();
+        assert!(
+            !rendered.html.contains("<section class=\"slide"),
+            "public HTML should be empty of slides when all are hidden"
+        );
+        assert!(rendered.editor_html.contains("<h1>A</h1>"));
+        assert!(rendered.editor_html.contains("<h1>B</h1>"));
+    }
+
+    #[test]
+    fn test_render_slide_html_marks_hidden() {
+        let input = "# A\n\n--- {hidden: true}\n\n# Draft\n";
+        let deck = parser::parse(input).unwrap();
+        let html = render_slide_html(&deck, 1).unwrap();
+        assert!(html.contains("data-hidden=\"true\""));
+        assert!(html.contains("slide-hidden"));
     }
 
     #[test]

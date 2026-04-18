@@ -188,6 +188,29 @@ em { font-style: italic; }
   justify-content: center;
 }
 
+/* Hidden-from-presentation slide. The public render path filters these out
+   entirely, so this styling only appears inside the editor preview iframe
+   (which requests `?editor=1` to keep them visible). */
+.slide.slide-hidden {
+  opacity: 0.55;
+}
+
+.slide[data-hidden="true"]::after {
+  content: "HIDDEN";
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.3rem 0.8rem;
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.15em;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* Semantic styles */
 .emphasis { font-size: 1.3em; font-weight: 700; }
 .aside { font-size: 0.85em; color: var(--color-muted, #666); }

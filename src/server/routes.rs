@@ -4,12 +4,13 @@ use std::time::Instant;
 
 use axum::{
     Router,
-    extract::State,
+    extract::{Query, State},
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     http::header,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
 };
+use serde::Deserialize;
 use tokio::sync::{Mutex, broadcast};
 
 use super::SharedDeck;
@@ -70,9 +71,23 @@ pub fn create_router(
     router.fallback_service(serve_dir).with_state(state)
 }
 
-async fn index(State(state): State<AppState>) -> impl IntoResponse {
+#[derive(Deserialize, Default)]
+struct IndexQuery {
+    /// When present (`?editor=1`), serve the editor-preview variant that
+    /// includes hidden slides marked with `data-hidden="true"`.
+    editor: Option<String>,
+}
+
+async fn index(
+    State(state): State<AppState>,
+    Query(q): Query<IndexQuery>,
+) -> impl IntoResponse {
     let deck = state.deck.read().await;
-    Html(deck.html.clone())
+    if q.editor.is_some() {
+        Html(deck.editor_html.clone())
+    } else {
+        Html(deck.html.clone())
+    }
 }
 
 async fn help_view() -> impl IntoResponse {

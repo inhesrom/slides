@@ -59,6 +59,10 @@ pub struct EditorSlide {
     /// Per-slide body size override (CSS length, e.g. "20px").
     #[serde(default)]
     pub body_size: Option<String>,
+    /// When `Some(true)`, the slide is skipped in the public presentation
+    /// and presenter views. Still shown in the editor.
+    #[serde(default)]
+    pub hidden: Option<bool>,
     /// Speaker notes (block notes content, may contain markdown).
     pub notes: String,
     /// Layout directive with region content.
@@ -73,6 +77,7 @@ impl Default for EditorSlide {
             class: None,
             title_size: None,
             body_size: None,
+            hidden: None,
             notes: String::new(),
             layout: None,
         }
@@ -127,6 +132,7 @@ mod tests {
         assert!(slide.class.is_none());
         assert!(slide.title_size.is_none());
         assert!(slide.body_size.is_none());
+        assert!(slide.hidden.is_none());
         assert!(slide.notes.is_empty());
         assert!(slide.layout.is_none());
     }

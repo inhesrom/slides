@@ -9,7 +9,7 @@
 </head>
 <body class="deck aspect-{{ aspect }}">
   {% for slide in slides %}
-  <section class="slide {{ slide.classes }}" data-index="{{ slide.index }}" data-transition="{{ slide.transition }}"{% if slide.style %} style="{{ slide.style }}"{% endif %}{% if slide.notes %} data-notes="{{ slide.notes | join('\n') }}"{% endif %}>
+  <section class="slide {{ slide.classes }}" data-index="{{ slide.index }}" data-transition="{{ slide.transition }}"{% if slide.hidden %} data-hidden="true"{% endif %}{% if slide.style %} style="{{ slide.style }}"{% endif %}{% if slide.notes %} data-notes="{{ slide.notes | join('\n') }}"{% endif %}>
     {{ slide.html | safe }}
   </section>
   {% endfor %}

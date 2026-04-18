@@ -43,6 +43,7 @@ pub fn editor_html() -> String {
           <div class="edit-controls">
             <button class="btn-sm" onclick="moveSlideUp()" title="Move up">&#9650;</button>
             <button class="btn-sm" onclick="moveSlideDown()" title="Move down">&#9660;</button>
+            <button class="btn-sm" id="hide-btn" onclick="toggleHideSlide()" title="Hide from presentation">&#128065;</button>
             <button class="btn-sm btn-danger" onclick="deleteSlide()" title="Delete slide">&#10005;</button>
           </div>
         </div>
@@ -109,7 +110,7 @@ pub fn editor_html() -> String {
           <button class="btn-sm" onclick="togglePreview()" id="preview-toggle" title="Hide preview">&#9654;</button>
         </div>
         <div class="preview-container" id="preview-container">
-          <iframe id="preview-frame" src="/"></iframe>
+          <iframe id="preview-frame" src="/?editor=1"></iframe>
         </div>
       </aside>
       <button class="preview-restore" id="preview-restore" onclick="togglePreview()" title="Show preview">&#9664;</button>
@@ -155,6 +156,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .slide-card { padding: 0.5rem 0.6rem; margin-bottom: 0.35rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; border: 1px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slide-card:hover { background: #334155; }
 .slide-card.active { background: #334155; border-color: #7dd3fc; color: #f1f5f9; }
+.slide-card.hidden { opacity: 0.45; font-style: italic; }
+.slide-card.hidden .slide-num::before { content: "\1F441 "; }
 .slide-card .slide-num { color: #64748b; font-size: 0.7rem; margin-right: 0.4rem; }
 
 /* Edit panel */
@@ -164,6 +167,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .edit-controls { display: flex; gap: 0.25rem; }
 .btn-sm { background: #334155; border: none; color: #e2e8f0; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
 .btn-sm:hover { background: #475569; }
+.btn-sm.btn-active { background: #7dd3fc; color: #0f172a; }
+.btn-sm.btn-active:hover { background: #5bbde0; }
 .btn-danger:hover { background: #dc2626; }
 .btn-icon { background: #334155; border: none; color: #e2e8f0; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
 .btn-icon:hover { background: #475569; }
@@ -341,7 +346,10 @@ const EDITOR_JS: &str = r##"
     slideListItems.innerHTML = '';
     deck.slides.forEach(function(slide, i) {
       var card = document.createElement('div');
-      card.className = 'slide-card' + (i === selectedSlide ? ' active' : '');
+      var cls = 'slide-card';
+      if (i === selectedSlide) cls += ' active';
+      if (slide.hidden === true) cls += ' hidden';
+      card.className = cls;
       var title = extractTitle(slide);
       card.innerHTML = '<span class="slide-num">' + (i + 1) + '</span>' + escapeHtml(title);
       card.onclick = function() { selectSlide(i); };
@@ -393,6 +401,18 @@ const EDITOR_JS: &str = r##"
     ts.value = slide.title_size ? (parseInt(slide.title_size, 10) || '') : '';
     bs.value = slide.body_size ? (parseInt(slide.body_size, 10) || '') : '';
 
+    // Hidden-toggle button pressed state
+    var hideBtn = document.getElementById('hide-btn');
+    if (hideBtn) {
+      if (slide.hidden === true) {
+        hideBtn.classList.add('btn-active');
+        hideBtn.title = 'Unhide — currently skipped in presentation';
+      } else {
+        hideBtn.classList.remove('btn-active');
+        hideBtn.title = 'Hide from presentation';
+      }
+    }
+
     // Notes
     notesEl.value = slide.notes;
   }
@@ -440,7 +460,7 @@ const EDITOR_JS: &str = r##"
     var now = Date.now();
     if (now - lastPreviewRefresh < REFRESH_COOLDOWN) return;
     lastPreviewRefresh = now;
-    previewFrame.src = '/?_t=' + Date.now() + '#/' + selectedSlide;
+    previewFrame.src = '/?editor=1&_t=' + Date.now() + '#/' + selectedSlide;
   }
 
   // --- Overflow detection ---
@@ -615,6 +635,7 @@ const EDITOR_JS: &str = r##"
       class: null,
       title_size: null,
       body_size: null,
+      hidden: null,
       notes: '',
       layout: null
     };
@@ -655,6 +676,20 @@ const EDITOR_JS: &str = r##"
     selectedSlide++;
     renderAll();
     markStructural();
+    scheduleSave();
+  };
+
+  // Toggle the "hidden from presentation" flag for the selected slide. The
+  // slide stays in the editor (we show a HIDDEN overlay in the preview iframe
+  // and dim the sidebar card); only the public/presenter views skip it.
+  window.toggleHideSlide = function() {
+    if (!deck || !deck.slides[selectedSlide]) return;
+    syncFromDOM();
+    var s = deck.slides[selectedSlide];
+    s.hidden = (s.hidden === true) ? null : true;
+    renderSlideList();
+    renderEditPanel();
+    schedulePreview();
     scheduleSave();
   };
 

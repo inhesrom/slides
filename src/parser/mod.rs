@@ -26,6 +26,8 @@ pub struct SlideAttrs {
     pub title_size: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body_size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -170,6 +172,13 @@ fn parse_separator_attrs(line: &str) -> SlideAttrs {
                     "timing" => attrs.timing = Some(value.to_string()),
                     "title_size" => attrs.title_size = Some(value.to_string()),
                     "body_size" => attrs.body_size = Some(value.to_string()),
+                    "hidden" => {
+                        attrs.hidden = match value.to_ascii_lowercase().as_str() {
+                            "true" | "yes" | "1" => Some(true),
+                            "false" | "no" | "0" => Some(false),
+                            _ => None,
+                        };
+                    }
                     _ => {}
                 }
             }
@@ -251,6 +260,26 @@ mod tests {
         assert!(attrs.timing.is_none());
         assert!(attrs.title_size.is_none());
         assert!(attrs.body_size.is_none());
+        assert!(attrs.hidden.is_none());
+    }
+
+    #[test]
+    fn test_attrs_hidden_true() {
+        let attrs = parse_separator_attrs("--- {hidden: true}");
+        assert_eq!(attrs.hidden, Some(true));
+    }
+
+    #[test]
+    fn test_attrs_hidden_false() {
+        let attrs = parse_separator_attrs("--- {hidden: false}");
+        assert_eq!(attrs.hidden, Some(false));
+    }
+
+    #[test]
+    fn test_attrs_hidden_with_other_attrs() {
+        let attrs = parse_separator_attrs("--- {class: centered, hidden: true}");
+        assert_eq!(attrs.class.as_deref(), Some("centered"));
+        assert_eq!(attrs.hidden, Some(true));
     }
 
     #[test]
