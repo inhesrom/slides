@@ -208,6 +208,24 @@ reveal.
 - Always visible
 ```
 
+For numbered lists, replace the `.` after the number with `+` to make that
+item a fragment. The list still renders as a normal `1. 2. 3.` ordered list.
+
+```markdown
+1+ First point
+1+ Second point
+1+ Third point
+```
+
+Mixing static and fragment items in a numbered list works the same way:
+
+```markdown
+1. Always visible
+1+ Appears on first reveal
+1+ Appears on second reveal
+1. Always visible
+```
+
 ---
 
 ## Layout Directives

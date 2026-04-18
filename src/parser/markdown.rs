@@ -91,11 +91,14 @@ fn extract_annotations(markdown: &str) -> (String, Vec<Annotation>) {
     for line in markdown.lines() {
         let trimmed = line.trim_end();
 
-        // Detect `+ ` list markers — these become fragment items.
-        // Insert a marker character that we find in the HTML output later.
+        // Detect `+ ` (bullet) and `<digits>+ ` (ordered) list markers — these
+        // become fragment items. Insert a marker character that we find in the
+        // HTML output later.
+        let indent = &trimmed[..trimmed.len() - trimmed.trim_start().len()];
         let working_line = if let Some(rest) = strip_plus_marker(trimmed) {
-            let indent = &trimmed[..trimmed.len() - trimmed.trim_start().len()];
             format!("{}- {}{}", indent, FRAGMENT_MARKER, rest)
+        } else if let Some((digits, rest)) = strip_ordered_plus_marker(trimmed) {
+            format!("{}{}. {}{}", indent, digits, FRAGMENT_MARKER, rest)
         } else {
             trimmed.to_string()
         };
@@ -120,6 +123,18 @@ fn extract_annotations(markdown: &str) -> (String, Vec<Annotation>) {
 fn strip_plus_marker(line: &str) -> Option<&str> {
     let trimmed = line.trim_start();
     trimmed.strip_prefix("+ ")
+}
+
+/// If the line is a `<digits>+ ` list item (ordered-list fragment),
+/// return the digit prefix and the content after the marker.
+fn strip_ordered_plus_marker(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim_start();
+    let digit_end = trimmed.bytes().take_while(|b| b.is_ascii_digit()).count();
+    if digit_end == 0 {
+        return None;
+    }
+    let rest = trimmed[digit_end..].strip_prefix("+ ")?;
+    Some((&trimmed[..digit_end], rest))
 }
 
 /// Parse a trailing `{.class1 .class2}` from a line.
@@ -291,6 +306,49 @@ mod tests {
         assert_eq!(strip_plus_marker("  + nested"), Some("nested"));
         assert_eq!(strip_plus_marker("- normal"), None);
         assert_eq!(strip_plus_marker("+no space"), None);
+    }
+
+    #[test]
+    fn test_strip_ordered_plus_marker() {
+        assert_eq!(strip_ordered_plus_marker("1+ hello"), Some(("1", "hello")));
+        assert_eq!(strip_ordered_plus_marker("  2+ nested"), Some(("2", "nested")));
+        assert_eq!(strip_ordered_plus_marker("12+ multi"), Some(("12", "multi")));
+        assert_eq!(strip_ordered_plus_marker("1. normal"), None);
+        assert_eq!(strip_ordered_plus_marker("+ bullet"), None);
+        assert_eq!(strip_ordered_plus_marker("1+no space"), None);
+        assert_eq!(strip_ordered_plus_marker("a+ not digit"), None);
+    }
+
+    #[test]
+    fn test_ordered_plus_marker_fragment() {
+        let result = render("1+ first\n1+ second\n1+ third");
+        assert!(result.contains("<ol>"), "Got: {}", result);
+        assert_eq!(result.matches("class=\"fragment\"").count(), 3, "Got: {}", result);
+        assert!(result.contains("<li class=\"fragment\">first</li>"), "Got: {}", result);
+        assert!(result.contains("<li class=\"fragment\">second</li>"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_ordered_plus_marker_mixed_list() {
+        let result = render("1. always\n1+ revealed\n1. also always");
+        assert!(result.contains("<ol>"), "Got: {}", result);
+        assert_eq!(result.matches("class=\"fragment\"").count(), 1, "Got: {}", result);
+        assert!(result.contains("<li class=\"fragment\">revealed</li>"), "Got: {}", result);
+        assert!(result.contains("<li>always</li>"), "Got: {}", result);
+        assert!(result.contains("<li>also always</li>"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_ordered_plus_marker_with_annotation() {
+        let result = render("1+ item {.highlight}");
+        assert!(result.contains("fragment"), "Got: {}", result);
+        assert!(result.contains("highlight"), "Got: {}", result);
+    }
+
+    #[test]
+    fn test_render_plain_does_not_make_ordered_fragments() {
+        let result = render_plain("1+ one\n1+ two");
+        assert!(!result.contains("fragment"), "Got: {}", result);
     }
 
     #[test]

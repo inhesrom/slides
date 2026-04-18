@@ -1,11 +1,20 @@
 pub mod export;
 pub mod theme;
 
+use std::sync::Mutex;
+
 use anyhow::Result;
 use minijinja::{Environment, context};
 
 use crate::layout::solver::{self, OverflowResult};
 use crate::parser::Deck;
+
+/// Last-emitted overflow signature (slide index + rounded pct) so that
+/// repeated renders of an unchanged deck don't spam the log. `render_deck`
+/// is called on every file save via the watcher, and the editor autosaves
+/// frequently — without this dedupe, every keystroke would re-emit the
+/// same warning.
+static LAST_OVERFLOW_SIG: Mutex<Option<Vec<(usize, u32)>>> = Mutex::new(None);
 
 #[allow(dead_code)]
 pub struct RenderedDeck {
@@ -133,12 +142,20 @@ pub fn render_deck(deck: &Deck) -> Result<RenderedDeck> {
     let slides_html: Vec<String> = deck.slides.iter().map(|s| s.html.clone()).collect();
     let overflows = solver::check_overflow(&slides_html, &deck.config.aspect);
 
-    for o in &overflows {
-        tracing::warn!(
-            "Slide {}: content overflows by ~{}%",
-            o.slide_index + 1,
-            o.overflow_pct
-        );
+    let sig: Vec<(usize, u32)> = overflows
+        .iter()
+        .map(|o| (o.slide_index, o.overflow_pct as u32))
+        .collect();
+    let mut last = LAST_OVERFLOW_SIG.lock().unwrap();
+    if last.as_ref() != Some(&sig) {
+        for o in &overflows {
+            tracing::warn!(
+                "Slide {}: content overflows by ~{}%",
+                o.slide_index + 1,
+                o.overflow_pct
+            );
+        }
+        *last = Some(sig);
     }
 
     Ok(RenderedDeck { html, overflows })
