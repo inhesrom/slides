@@ -44,7 +44,7 @@ slides export presentation.md -f pdf -o deck.pdf  # requires --features pdf
 - **Themes** — `minimal` (light) and `dark` built-in, customizable via CSS custom properties
 - **Export** — self-contained HTML or PDF via headless Chrome
 - **Visual editor** — `slides edit` opens a browser-based editor with toolbar, layout selector, and live preview; the `.md` file updates in real time
-- **Syntax reference** — visit `/help` in the browser while presenting, or run `slides init` for a commented template
+- **Syntax reference** — visit `/help` in the browser while presenting, or run `slides init` for a starter deck that exercises every feature
 
 ## Syntax and usage
 

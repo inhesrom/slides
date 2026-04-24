@@ -86,11 +86,22 @@ Perfect for title pages and section dividers.
 
 This slide used `--- {transition: fade}` as its separator.
 
-You can also set `class` and `timing` on separators:
+You can also set `class`, `timing`, and per-slide font sizes on separators:
 
 ```markdown
 --- {transition: fade, class: centered, timing: 45s}
+--- {title_size: 96px, body_size: 20px}
+--- {hidden: true}
 ```
+
+--- {title_size: 120px, body_size: 28px}
+
+## Per-slide Sizes
+
+This slide uses `--- {title_size: 120px, body_size: 28px}`.
+
+Override the deck defaults on any single slide when a section needs to breathe
+— a title, a pull quote, or a dense reference card.
 
 ---
 
@@ -113,6 +124,12 @@ Use `+` instead of `-` for list items that appear one at a time:
 + First point
 + Second point
 + Third point
+
+For numbered lists, replace the `.` with `+`:
+
+1+ First numbered reveal
+1+ Second numbered reveal
+1+ Third numbered reveal
 
 Press → to reveal each fragment before advancing.
 
@@ -274,6 +291,23 @@ slides present deck.md
 # Visual editor in the browser
 slides edit deck.md
 ```
+
+---
+
+## Hidden Slides
+
+The next slide in the source has `--- {hidden: true}`, so it does not appear
+in the presentation, presenter view, or exports.
+
+Drafts, backup material, and speaker-notes-only asides can live inline without
+cluttering the deck.
+
+--- {hidden: true}
+
+## This Slide Is Hidden
+
+You should not see this slide in the browser. Remove the `hidden: true`
+attribute (or toggle it from the editor) to bring it back.
 
 ---
 

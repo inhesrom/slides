@@ -21,7 +21,7 @@ Active in the browser while viewing or presenting a deck.
 | `D` | Toggle dark mode |
 | `P` | Open presenter view |
 | `+` / `=` | (Presenter view) Increase notes font size for current slide |
-| `-` | (Presenter view) Decrease notes font size for current slide |
+| `-` / `_` | (Presenter view) Decrease notes font size for current slide |
 | `Esc` | Exit fullscreen |
 
 Touch: swipe left / right to navigate.
@@ -65,6 +65,10 @@ slides present deck.md
 slides present deck.md --port 8080
 ```
 
+Options:
+
+- `-p`, `--port <PORT>` — port to serve on (default `3030`)
+
 ### `slides edit <file>`
 
 Visual editor in the browser. The `.md` file updates in real time as you edit.
@@ -72,7 +76,12 @@ Creates the file if it does not exist.
 
 ```bash
 slides edit deck.md
+slides edit deck.md --port 8080
 ```
+
+Options:
+
+- `-p`, `--port <PORT>` — port to serve on (default `3030`)
 
 ### `slides export <file>`
 
