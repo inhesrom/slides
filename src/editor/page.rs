@@ -36,6 +36,7 @@ pub fn editor_html() -> String {
           <button class="btn-icon" onclick="addSlide()" title="Add slide">+</button>
         </div>
         <div class="slide-list-items" id="slide-list-items"></div>
+        <div class="resize-handle resize-handle-right" id="slide-list-resize-handle"></div>
       </aside>
       <section class="edit-panel" id="edit-panel">
         <div class="edit-header">
@@ -150,7 +151,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .main-panels { display: flex; flex: 1; overflow: hidden; position: relative; }
 
 /* Slide list sidebar */
-.slide-list { width: 180px; min-width: 180px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; }
+.slide-list { width: 180px; min-width: 80px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; position: relative; }
 .slide-list-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; font-size: 0.85rem; font-weight: 600; color: #94a3b8; border-bottom: 1px solid #334155; }
 .slide-list-items { flex: 1; overflow-y: auto; padding: 0.5rem; }
 .slide-card { padding: 0.5rem 0.6rem; margin-bottom: 0.35rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; border: 1px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -159,6 +160,9 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 .slide-card.hidden { opacity: 0.45; font-style: italic; }
 .slide-card.hidden .slide-num::before { content: "\1F441 "; }
 .slide-card .slide-num { color: #64748b; font-size: 0.7rem; margin-right: 0.4rem; }
+.slide-card.dragging { opacity: 0.4; }
+.slide-card.drop-before { box-shadow: inset 0 2px 0 0 #7dd3fc; }
+.slide-card.drop-after { box-shadow: inset 0 -2px 0 0 #7dd3fc; }
 
 /* Edit panel */
 .edit-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0.75rem; gap: 0.5rem; }
@@ -222,6 +226,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; c
 /* Resize handle — positioned at the left edge of preview panel */
 .preview-panel { position: relative; }
 .resize-handle { width: 5px; cursor: col-resize; background: transparent; position: absolute; left: -3px; top: 0; bottom: 0; z-index: 10; }
+.resize-handle.resize-handle-right { left: auto; right: -3px; }
 .resize-handle:hover, .resize-handle.dragging { background: #7dd3fc; }
 
 /* Overflow warning */
@@ -350,11 +355,91 @@ const EDITOR_JS: &str = r##"
       if (i === selectedSlide) cls += ' active';
       if (slide.hidden === true) cls += ' hidden';
       card.className = cls;
+      card.draggable = true;
+      card.dataset.slideIndex = i;
       var title = extractTitle(slide);
       card.innerHTML = '<span class="slide-num">' + (i + 1) + '</span>' + escapeHtml(title);
       card.onclick = function() { selectSlide(i); };
+      attachSlideCardDragHandlers(card);
       slideListItems.appendChild(card);
     });
+  }
+
+  // --- Slide card drag-and-drop reordering ---
+  function clearSlideDropIndicators() {
+    var cards = slideListItems.querySelectorAll('.slide-card');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].classList.remove('drop-before', 'drop-after');
+    }
+  }
+
+  function attachSlideCardDragHandlers(card) {
+    card.addEventListener('dragstart', function(e) {
+      var idx = parseInt(card.dataset.slideIndex, 10);
+      e.dataTransfer.effectAllowed = 'move';
+      // Some browsers refuse to start a drag without setData. The payload
+      // value isn't read on drop — we use card.dataset.slideIndex instead —
+      // but it has to be present for Firefox.
+      try { e.dataTransfer.setData('text/x-slide-index', String(idx)); } catch (err) {}
+      card.classList.add('dragging');
+    });
+
+    card.addEventListener('dragover', function(e) {
+      var dragging = slideListItems.querySelector('.slide-card.dragging');
+      if (!dragging || dragging === card) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var rect = card.getBoundingClientRect();
+      var before = e.clientY < rect.top + rect.height / 2;
+      if (card.classList.contains(before ? 'drop-before' : 'drop-after')) return;
+      clearSlideDropIndicators();
+      card.classList.add(before ? 'drop-before' : 'drop-after');
+    });
+
+    card.addEventListener('dragleave', function(e) {
+      // Only clear when leaving the card itself, not when crossing into a
+      // child element (which fires dragleave on the parent).
+      if (e.target === card) {
+        card.classList.remove('drop-before', 'drop-after');
+      }
+    });
+
+    card.addEventListener('drop', function(e) {
+      var dragging = slideListItems.querySelector('.slide-card.dragging');
+      if (!dragging || dragging === card) return;
+      e.preventDefault();
+      var srcIdx = parseInt(dragging.dataset.slideIndex, 10);
+      var tgtIdx = parseInt(card.dataset.slideIndex, 10);
+      var rect = card.getBoundingClientRect();
+      var before = e.clientY < rect.top + rect.height / 2;
+      var insertIdx = before ? tgtIdx : tgtIdx + 1;
+      // After splicing srcIdx out, indices to its right shift left by one.
+      var adjustedIdx = (srcIdx < insertIdx) ? insertIdx - 1 : insertIdx;
+      clearSlideDropIndicators();
+      if (adjustedIdx === srcIdx) return;
+      reorderSlide(srcIdx, adjustedIdx);
+    });
+
+    card.addEventListener('dragend', function() {
+      card.classList.remove('dragging');
+      clearSlideDropIndicators();
+    });
+  }
+
+  function reorderSlide(srcIdx, dstIdx) {
+    syncFromDOM();
+    var moved = deck.slides.splice(srcIdx, 1)[0];
+    deck.slides.splice(dstIdx, 0, moved);
+    if (selectedSlide === srcIdx) {
+      selectedSlide = dstIdx;
+    } else if (srcIdx < selectedSlide && dstIdx >= selectedSlide) {
+      selectedSlide -= 1;
+    } else if (srcIdx > selectedSlide && dstIdx <= selectedSlide) {
+      selectedSlide += 1;
+    }
+    renderAll();
+    markStructural();
+    scheduleSave();
   }
 
   function extractTitle(slide) {
@@ -1046,6 +1131,41 @@ const EDITOR_JS: &str = r##"
       if (!dragging) return;
       dragging = false;
       resizeHandle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  })();
+
+  // --- Slide-list resize handle ---
+  (function() {
+    var slideList = document.getElementById('slide-list');
+    var handle = document.getElementById('slide-list-resize-handle');
+    if (!slideList || !handle) return;
+    var dragging = false;
+    var startX, startWidth;
+
+    handle.addEventListener('mousedown', function(e) {
+      dragging = true;
+      startX = e.clientX;
+      startWidth = slideList.offsetWidth;
+      handle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      var dx = e.clientX - startX;
+      var newWidth = Math.max(120, Math.min(window.innerWidth * 0.4, startWidth + dx));
+      slideList.style.width = newWidth + 'px';
+      scalePreview();
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     });
