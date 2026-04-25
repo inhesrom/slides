@@ -43,6 +43,7 @@ pub fn presenter_html(deck_title: &str) -> String {
             <button onclick="resetTimer()">Reset</button>
             <button onclick="toggleTimer()" id="timer-btn">Pause</button>
           </div>
+          <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
         </div>
       </div>
     </div>
@@ -84,6 +85,8 @@ body { background: #1a1a2e; color: #e2e8f0; font-family: system-ui, sans-serif; 
 .controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; padding: 1rem; background: #0f172a; border-radius: 8px; }
 .timer { font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .progress { font-size: 1.1rem; color: #94a3b8; }
+.progress-bar { flex-basis: 100%; height: 4px; background: #334155; border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0; background: #60a5fa; transition: width 0.3s ease; }
 .timer-controls { display: flex; gap: 0.5rem; }
 .timer-controls button { background: #334155; color: #e2e8f0; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
 .timer-controls button:hover { background: #475569; }
@@ -138,6 +141,7 @@ const PRESENTER_JS: &str = r#"
   var notesEl = document.getElementById('notes-content');
   var timerEl = document.getElementById('timer');
   var progressEl = document.getElementById('progress');
+  var progressFillEl = document.getElementById('progress-fill');
   var timerBtn = document.getElementById('timer-btn');
   var drawerEl = document.getElementById('slide-drawer');
   var drawerToggle = document.getElementById('drawer-toggle');
@@ -256,6 +260,9 @@ const PRESENTER_JS: &str = r#"
       fragInfo = ' (fragment ' + currentFragments + '/' + sd.fragmentCount + ')';
     }
     progressEl.textContent = 'Slide ' + (currentSlide + 1) + ' / ' + totalSlides + fragInfo;
+    if (totalSlides > 0) {
+      progressFillEl.style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+    }
 
     updateActiveThumbnail();
   }

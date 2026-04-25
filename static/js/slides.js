@@ -30,7 +30,6 @@
     current = index;
     slides[current].classList.add('active');
     slides[current].classList.add('enter-' + direction);
-    updateProgress();
     updateHash();
     notifyParent();
   }
@@ -86,13 +85,6 @@
       getFragments()[idx].classList.remove('visible');
     } else {
       showSlide(current - 1);
-    }
-  }
-
-  function updateProgress() {
-    var fill = document.getElementById('progress-fill');
-    if (fill) {
-      fill.style.width = ((current + 1) / total * 100) + '%';
     }
   }
 
@@ -305,6 +297,5 @@
   if (slides[current]) {
     slides[current].classList.add('active');
   }
-  updateProgress();
   connectWS();
 })();

@@ -275,14 +275,6 @@ mod tests {
     }
 
     #[test]
-    fn test_render_progress_bar() {
-        let deck = parser::parse("# Slide\n").unwrap();
-        let rendered = render_deck(&deck).unwrap();
-        assert!(rendered.html.contains("id=\"progress-bar\""));
-        assert!(rendered.html.contains("id=\"progress-fill\""));
-    }
-
-    #[test]
     fn test_render_slide_count() {
         let input = "A\n---\nB\n---\nC\n";
         let deck = parser::parse(input).unwrap();
