@@ -183,15 +183,31 @@ const PRESENTER_JS: &str = r#"
       invalidateThumbnails();
     } else if (data.type === 'sync' && data.origin !== presenterSyncId) {
       // Incoming sync from audience view — follow their navigation
-      currentSlide = data.slide;
-      currentFragments = typeof data.fragments === 'number' ? data.fragments : 0;
-      updatePresenterView();
+      if (setPresenterState(data.slide, data.fragments)) {
+        updatePresenterView();
+      }
     }
   };
 
   ws.onclose = function() {
     setTimeout(function() { location.reload(); }, 1000);
   };
+
+  // If the current slide iframe has focus, its own deck script handles arrow
+  // keys. Treat that as presenter navigation so the side panel and audience
+  // view stay in sync.
+  window.addEventListener('message', function(e) {
+    if (!e.data || e.data.type !== 'preview-slide-change') return;
+    if (!currentFrame.contentWindow || e.source !== currentFrame.contentWindow) return;
+    if (typeof e.data.slide !== 'number') return;
+
+    var prevSlide = currentSlide;
+    var prevFragments = currentFragments;
+    if (!setPresenterState(e.data.slide, e.data.fragments)) return;
+    if (currentSlide === prevSlide && currentFragments === prevFragments) return;
+    updatePresenterView();
+    broadcastSync();
+  });
 
   // Load the deck in both iframes
   currentFrame.src = '/';
@@ -232,6 +248,22 @@ const PRESENTER_JS: &str = r#"
     } catch(e) {
       // Cross-origin or not loaded yet
     }
+  }
+
+  function setPresenterState(slide, fragments) {
+    if (typeof slide !== 'number' || slide < 0) return false;
+    if (totalSlides > 0 && slide >= totalSlides) return false;
+
+    var nextFragments = typeof fragments === 'number' ? fragments : 0;
+    nextFragments = Math.max(0, nextFragments);
+    var sd = slidesData[slide];
+    if (sd) {
+      nextFragments = Math.min(nextFragments, sd.fragmentCount);
+    }
+
+    currentSlide = slide;
+    currentFragments = nextFragments;
+    return true;
   }
 
   function updatePresenterView() {
@@ -370,6 +402,7 @@ const PRESENTER_JS: &str = r#"
   }
 
   function broadcastSync() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({
       type: 'sync',
       slide: currentSlide,

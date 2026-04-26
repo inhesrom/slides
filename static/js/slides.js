@@ -21,9 +21,9 @@
   scaleDeck();
   window.addEventListener('resize', scaleDeck);
 
-  function showSlide(index) {
-    if (index < 0 || index >= total) return;
-    if (index === current) return;
+  function showSlide(index, options) {
+    if (index < 0 || index >= total) return false;
+    if (index === current) return false;
     slides[current].classList.remove('active');
     slides[current].classList.remove('enter-forward', 'enter-backward');
     var direction = index > current ? 'forward' : 'backward';
@@ -31,7 +31,10 @@
     slides[current].classList.add('active');
     slides[current].classList.add('enter-' + direction);
     updateHash();
-    notifyParent();
+    if (!options || options.notify !== false) {
+      notifyParent();
+    }
+    return true;
   }
 
   function notifyParent() {
@@ -74,6 +77,7 @@
     var idx = nextVisibleFragment();
     if (idx >= 0) {
       getFragments()[idx].classList.add('visible');
+      notifyParent();
     } else {
       showSlide(current + 1);
     }
@@ -83,6 +87,7 @@
     var idx = prevVisibleFragment();
     if (idx >= 0) {
       getFragments()[idx].classList.remove('visible');
+      notifyParent();
     } else {
       showSlide(current - 1);
     }
@@ -210,6 +215,7 @@
         showSlide(data.slide);
       } else if (data.type === 'sync' && data.origin !== syncId) {
         // Sync from presenter or another view — jump to exact state
+        if (typeof data.slide !== 'number' || data.slide < 0 || data.slide >= total) return;
         showSlide(data.slide);
         var frags = getFragments();
         var count = typeof data.fragments === 'number' ? data.fragments : 0;
@@ -252,7 +258,8 @@
   window.addEventListener('message', function(e) {
     if (!e.data) return;
     if (e.data.type === 'goto' && typeof e.data.slide === 'number') {
-      showSlide(e.data.slide);
+      if (e.data.slide < 0 || e.data.slide >= total) return;
+      showSlide(e.data.slide, { notify: false });
       // Optionally reveal a specific number of fragments
       if (typeof e.data.fragments === 'number') {
         var frags = getFragments();
@@ -264,6 +271,7 @@
           }
         }
       }
+      notifyParent();
     } else if (e.data.type === 'update-slide'
                && typeof e.data.index === 'number'
                && typeof e.data.html === 'string') {
