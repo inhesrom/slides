@@ -173,6 +173,78 @@ Text with a footnote[^1].
 
 ---
 
+## Lists
+
+Unordered and numeric ordered lists are standard CommonMark:
+
+```markdown
+- Bullet one
+- Bullet two
+
+1. First
+2. Second
+```
+
+### Lettered and roman-numeral lists
+
+Start each item with a single-letter marker instead of a number to get an
+ordered list styled with letters or roman numerals:
+
+| Marker | Renders as |
+|---|---|
+| `a. ` | `a b c …` (lowercase letters) |
+| `A. ` | `A B C …` (uppercase letters) |
+| `i. ` | `i ii iii …` (lowercase roman) |
+| `I. ` | `I II III …` (uppercase roman) |
+
+```markdown
+a. First point
+a. Second point
+a. Third point
+
+I. Overview
+I. Details
+I. Summary
+```
+
+The list starts at whatever letter you type on the first item and increments
+from there, so you can either repeat one marker (`a. a. a.` → `a b c`) or type
+the sequence (`a. b. c.`) — both render `a b c`. Starting at another letter
+works too: a list beginning `c.` renders `c d e`.
+
+Lettered items are **fragment reveals by default** — they appear one at a time,
+like `+` bullets. Use `)` instead of `.` for an item that is always visible;
+`a+` is an explicit-reveal alias of `a.`. Reveal and static items mix freely in
+one list:
+
+| Form | Behavior |
+|---|---|
+| `a. ` / `a+ ` | revealed one at a time (default) |
+| `a) ` | always visible |
+
+Notes:
+
+- `i` / `I` start a **roman** list; any other letter starts an **alphabetic**
+  one. The choice is made by the first item, so a longer alphabetic list that
+  simply reaches its 9th item (`i`) still renders `i`, not roman `ix`. Roman
+  lists repeat the single-letter marker on every item (`i. i. i.` renders
+  `i ii iii`) — a typed `ii.` is two letters and is not a marker.
+- A marker is exactly one letter followed by `. `, `+ `, or `) ` (delimiter
+  then space). Lines that don't fit are left as prose: abbreviations
+  (`e.g. …`), multi-initial names (`J. R. R. Tolkien`), and any single-letter
+  line in the middle of a paragraph or inside a code block are **not** turned
+  into lists. A lone initial or grade that starts a line (`W. Edwards
+  Deming …`, `A+ rating`) does match — escape the delimiter (`W\. Edwards…`,
+  `A\+ rating`) to keep it prose.
+- Items can span multiple lines; indent continuation lines to the text of the
+  item (three spaces).
+- Two lettered lists of different styles separated by a blank line restart
+  automatically (`a b` then `A B`). Two lists of the *same* style placed
+  back-to-back keep counting — put a heading or paragraph between them to start
+  a fresh one. Markers are not recognized inside blockquotes.
+
+---
+
 ## Semantic Annotations
 
 Add CSS classes to a block element by appending `{.classname}` to the end of
@@ -241,6 +313,9 @@ Mixing static and fragment items in a numbered list works the same way:
 1+ Appears on second reveal
 1. Always visible
 ```
+
+Lettered and roman lists (see [Lists](#lists)) are the opposite way around:
+`a.` items reveal **by default**, and `a)` marks an always-visible item.
 
 ---
 

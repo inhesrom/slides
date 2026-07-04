@@ -135,6 +135,24 @@ Press → to reveal each fragment before advancing.
 
 ---
 
+## Lettered & Roman Lists
+
+Start items with a single-letter marker for lettered or roman ordering.
+Dot-form items reveal one at a time by default:
+
+a. Lowercase letters
+a. Revealed as you advance
+a. Just like `+` fragments
+
+Use `)` instead of `.` for always-visible items:
+
+a) Shown immediately
+a) No reveal needed
+
+Use `A.` for uppercase letters, `i.` for lowercase roman, `I.` for uppercase.
+
+---
+
 :::split 60/40
 
 ## Split Layout
