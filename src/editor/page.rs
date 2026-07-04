@@ -85,6 +85,7 @@ pub fn editor_html() -> String {
           <span class="toolbar-sep"></span>
           <button onclick="toolBulletList()" title="Bullet list">&bull;</button>
           <button onclick="toolNumberedList()" title="Numbered list">1.</button>
+          <button onclick="toolLetteredList()" title="Lettered list (a. reveals; a) static)">a.</button>
           <button onclick="toolFragmentList()" title="Fragment (reveal)">+</button>
           <span class="toolbar-sep"></span>
           <button onclick="toolBlockquote()" title="Blockquote">&ldquo;</button>
@@ -872,7 +873,7 @@ const EDITOR_JS: &str = r##"
     if (lineEnd === -1) lineEnd = val.length;
     var line = val.substring(lineStart, lineEnd);
     // Remove existing list/heading prefix
-    var cleaned = line.replace(/^(\s*)(#{1,6}\s+|[-+*]\s+|\d+\.\s+|>\s+)/, '$1');
+    var cleaned = line.replace(/^(\s*)(#{1,6}\s+|[-+*]\s+|\d+\.\s+|[A-Za-z][.+)]\s+|>\s+)/, '$1');
     replaceRange(ta, lineStart, lineEnd, prefix + cleaned);
     scheduleSave();
   }
@@ -883,6 +884,7 @@ const EDITOR_JS: &str = r##"
   window.toolHeading = function(level) { prependLine('#'.repeat(level) + ' '); };
   window.toolBulletList = function() { prependLine('- '); };
   window.toolNumberedList = function() { prependLine('1. '); };
+  window.toolLetteredList = function() { prependLine('a. '); };
   window.toolFragmentList = function() { prependLine('+ '); };
   window.toolBlockquote = function() { prependLine('> '); };
 

@@ -116,11 +116,19 @@ p:last-child { margin-bottom: 0; }
 
 ul, ol {
   margin-bottom: 0.8em;
-  padding-left: 1.5em;
+  padding-left: 2.5em;
 }
 
 li { margin-bottom: 0.3em; }
 li:last-child { margin-bottom: 0; }
+
+/* Lettered / roman-numeral ordered lists (a./A./i./I. authoring markers).
+   list-style-type on the <li> renders that item's marker while the enclosing
+   <ol> counter still auto-increments. */
+li.list-lower-alpha { list-style-type: lower-alpha; }
+li.list-upper-alpha { list-style-type: upper-alpha; }
+li.list-lower-roman { list-style-type: lower-roman; }
+li.list-upper-roman { list-style-type: upper-roman; }
 
 blockquote {
   border-left: 4px solid var(--color-accent, #2563eb);
